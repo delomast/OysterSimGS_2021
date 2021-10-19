@@ -66,12 +66,12 @@ for(i in 1:length(allPanels)){
 	
 	# calc GEBVs - no imputation
 	Amat <- A.mat(g - 1) # centering and calculating G with first method of VanRaden (2008), also Endelman and Jannik (2012)
-	p <- data.frame(id = rownames(Amat)) |> 
-		left_join(trainPhenos |> select(id, Trait_1) |> rename(pheno = Trait_1), by = "id") # hard coded for first trait
+	p <- data.frame(id = rownames(Amat)) %>% 
+		left_join(trainPhenos %>% select(id, Trait_1) %>% rename(pheno = Trait_1), by = "id") # hard coded for first trait
 	# predict genomic breeding values
 	gebv <- kin.blup(data = p, geno = "id", pheno = "pheno", K = Amat)
-	comp <- data.frame(id = offspring@id, gv = gv(offspring)) |> 
-		left_join(data.frame(id = names(gebv$g), gebv = gebv$g), by = "id") |>
+	comp <- data.frame(id = offspring@id, gv = gv(offspring)) %>% 
+		left_join(data.frame(id = names(gebv$g), gebv = gebv$g), by = "id") %>%
 		left_join(p, by = "id")
 	
 	# quick inspection of one iteration
@@ -79,10 +79,8 @@ for(i in 1:length(allPanels)){
 	# comp %>% ggplot() + aes(x = gebv, y = gv, color = is.na(pheno)) + geom_point() + 
 	# 	geom_smooth(method = "lm")
 	
-	# snpBLUP <- mixed.solve(p$pheno, Z = g - 1) # implementation of SNP-BLUP (note it is much faster for panel size << number of individuals)
-	
 	# calc accuracy of prediction and save
-	res <- res |> rbind(data.frame(panelNum = i, 
+	res <- res %>% rbind(data.frame(panelNum = i, 
 																 impute = FALSE, 
 																 numLoci = ncol(g), 
 																 acc = cor(comp$gv[is.na(comp$pheno)], comp$gebv[is.na(comp$pheno)])))
