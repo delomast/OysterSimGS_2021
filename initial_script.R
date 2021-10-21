@@ -15,11 +15,27 @@ source("utils.R")
 # numCores <- availableCores()
 # if(Sys.info()["sysname"] == "Windows") numCores <- 1
 
+# small for quick prototyping
+qtlPerChr <- 10
+neutralPerChr <- 100
+nChr <- 10
+nFound <- 40
+nOffspringPerCross <- 60
+
+# write AlphaPeel spec file (for one chromosome)
+cat("nsnp, ", neutralPerChr, "\n", 
+"inputfilepath, temp/apGeno.txt
+pedigree, temp/ped.txt
+outputfilepath, temp/apOut
+runtype, multi
+ncycles, 10
+", file = "apSpec.txt", sep = "")
+
 # quick founder pop for prototyping
 founderPop <- runMacs2(
-		nInd = 200,
-		nChr = 10,
-		segSites = 5100,
+		nInd = nFound,
+		nChr = nChr,
+		segSites = qtlPerChr + neutralPerChr,
 		Ne = 12000,
 		bp = 7e+07,
 		genLen = 1,
@@ -34,17 +50,18 @@ founderPop <- runMacs2(
 )
 
 SP <- SimParam$new(founderPop)
-SP$addTraitA(nQtlPerChr=100) # lot's of QTL
-SP$setVarE(h2=0.3) # in the range of heritability for growth, meat yield, survival, etc
-SP$setSexes("yes_rand") # at the time of breeding, all individuals will only be one sex
-SP$addSnpChip(5000) # all non-QTL SNPs saved from simulation
+SP$setTrackPed(isTrackPed = TRUE) # have AlphaSimR maintain pedigree records
+SP$addTraitA(nQtlPerChr = qtlPerChr)
+SP$setVarE(h2 = 0.3) # in the range of heritability for growth, meat yield, survival, etc
+SP$setSexes("yes_sys") # at the time of breeding, all individuals will only be one sex
+SP$addSnpChip(neutralPerChr) # all non-QTL SNPs saved from simulation
 
 pop <- newPop(founderPop)
 snpGen <- pullSnpGeno(pop) # founder SNP genotypes
 
 # SNP panel "design"
-numLoci <- c(seq(10, 100, 10), seq(125, 500, 25), seq(750, 5000, 250), seq(6000, 50000, 2000)) # number of loci in each panel to compare
-
+numLoci <- c(seq(100, 500, 50), seq(750, 5000, 250), seq(6000, 50000, 2000)) # number of loci in each panel to compare
+numLoci <- numLoci[numLoci <= neutralPerChr * nChr]
 numLoci <- numLoci[1:5] # for quick testing
 
 snpMap <- getSnpMap()
@@ -53,7 +70,7 @@ snpMap <- getSnpMap()
 allPanels <- lapply(numLoci, quickChooseLoci, genos = snpGen, map = snpMap)
 
 # initial spawning
-offspring <- randCross(pop, nCrosses = 100, nProgeny = 60, balance = TRUE)
+offspring <- randCross(pop, nCrosses = nFound/2, nProgeny = nOffspringPerCross, balance = TRUE)
 
 # phenotype training pop (sibs)
 trainPhenos <- sibTestEqual(fam = offspring, propTest = 0.5)
@@ -87,6 +104,44 @@ for(i in 1:length(allPanels)){
 	
 	# impute
 	
+	# AlphaPeel
+	
+	# make inputs
+	offspGeno <- pullSnpGeno(offspring)
+	offspGeno[,!colnames(offspGeno) %in% allPanels[[i]]$id] <- 9 # low density offspring
+	apGeno <- rbind(pullSnpGeno(pop), offspGeno) # combine parent (high density) and offspring genotypes
+	rm(offspGeno) # save some memory
+	
+	ped <- SP$pedigree[,1:2]
+	write.table(ped, file = "temp/ped.txt", sep = " ", quote = FALSE, col.names = FALSE, 
+							row.names = TRUE)
+	# impute
+	imputeDose <- data.frame(id = rownames(ped))
+	# for each chromosome
+	for(j in 1:nChr){
+		tempCols <- colnames(apGeno)[grepl(paste0("^", j, "_"), colnames(apGeno))] # loci in chromosome j
+		write.table(apGeno[,tempCols],
+								file = "temp/apGeno.txt", sep = " ", quote = FALSE, col.names = FALSE, 
+								row.names = TRUE)
+		# run AlphaPeel
+		if(Sys.info()["sysname"] == "Windows"){
+			system2("AlphaPeel/AlphaPeel_windows.exe", args = "apSpec.txt")
+		} else {
+			stop("OS not set up")
+		}
+		# load results
+		tempImputeDose <- read.table("temp/apOut.dosages")
+		colnames(tempImputeDose) <- c("id", tempCols)
+		imputeDose <- imputeDose %>% 
+			left_join(tempImputeDose %>% mutate(id = as.character(id)), by = "id")
+	}
+
+
+	
+	# SHAPEIT2 with duoHMM
+	
+	# Beagle
+	
 	# calc imputation accuracy and save
 	
 	# calculate GEBVs
@@ -94,12 +149,5 @@ for(i in 1:length(allPanels)){
 	# calc accuracy of prediction and save
 	
 }
-
-
-# now testing imputation with deeper pedigree
-# make a few generations with random crosses then run above
-
-# impute and 
-
 
 
