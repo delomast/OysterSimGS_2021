@@ -1,6 +1,5 @@
 # utility functions used in other script(s)
 
-library(tibble)
 library(dplyr)
 
 #' function to apply full-sib family testing with an AlphaSimR object
@@ -11,7 +10,7 @@ library(dplyr)
 #' @param propTest the proportion of each family to phenotype. One value applied
 #'   to all families. The actual number of indiviudals to phenotype will be rounded.
 sibTestEqual <- function(fam, propTest){
-	fs <- tibble(mother = fam@mother, father = fam@father) %>% 
+	fs <- data.frame(mother = fam@mother, father = fam@father) %>% 
 		count(mother, father) %>% mutate(nPheno = round(propTest * n))
 	phenos <- data.frame()
 	for(i in 1:nrow(fs)){
@@ -37,11 +36,11 @@ sibTestEqual <- function(fam, propTest){
 #' @param map genetic map of loci (output of `AlphaSimR::getSnpMap`)
 quickChooseLoci <- function(num, genos, map){
 	He <- (colSums(genos) / (2 * nrow(genos))) %>% (function(x) 2 * x * (1-x))() # H_exp
-	map <- map %>% left_join(tibble(He = He, id = names(He)), by = "id")
+	map <- map %>% left_join(data.frame(He = He, id = names(He)), by = "id")
 	# calculate window sizes
 	distr <- map %>% group_by(chr) %>% summarise(l = max(pos)) %>% 
 		mutate(num = round(num / n_distinct(chr)), wSize = l / num)
-	panel <- tibble()
+	panel <- data.frame()
 	for(i in 1:nrow(distr)){ # for each chr
 		skipBool <- FALSE
 		cands <- map %>% filter(chr == distr$chr[i])

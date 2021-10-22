@@ -76,7 +76,8 @@ offspring <- randCross(pop, nCrosses = nFound/2, nProgeny = nOffspringPerCross, 
 trainPhenos <- sibTestEqual(fam = offspring, propTest = 0.5)
 
 # now calculate things with a bunch of different panels
-res <- data.frame()
+gebvRes <- data.frame()
+imputeRes <- data.frame()
 for(i in 1:length(allPanels)){
 	# genotypes
 	g <- pullSnpGeno(offspring)[,allPanels[[i]]$id]
@@ -97,9 +98,9 @@ for(i in 1:length(allPanels)){
 	# 	geom_smooth(method = "lm")
 	
 	# calc accuracy of prediction and save
-	res <- res %>% rbind(data.frame(panelNum = i, 
+	gebvRes <- gebvRes %>% rbind(data.frame(panelNum = i, 
 																 impute = FALSE, 
-																 numLoci = ncol(g), 
+																 numLoci = nrow(allPanels[[i]]), 
 																 acc = cor(comp$gv[is.na(comp$pheno)], comp$gebv[is.na(comp$pheno)])))
 	
 	# impute
@@ -137,17 +138,53 @@ for(i in 1:length(allPanels)){
 	}
 
 
-	
-	# SHAPEIT2 with duoHMM
-	
-	# Beagle
+	# Do we need to look at other programs? maybe first determine if imputation
+	# with multi-locus peeling is poor
+	# SHAPEIT2 with duoHMM?
+	# Beagle?
 	
 	# calc imputation accuracy and save
+	# although wiwll discuss that this means very little for GS (Calus et al 2014 doi:10.1017/S1751731114001803)
+	trueGenos <- pullSnpGeno(offspring)
+	# get only loci/individuals that were imputed
+	imputeCalls <- imputeDose[imputeDose$id %in% rownames(trueGenos), !colnames(imputeDose) %in% allPanels[[i]]$id]
+	rownames(imputeCalls) <- imputeCalls$id
+	imputeCalls <- as.matrix(imputeCalls[,-1])
+	trueGenos <- trueGenos[rownames(imputeCalls), colnames(imputeCalls)]
 	
+	imputeRes <- imputeRes %>% 
+		rbind(data.frame(panelNum = i, 
+										numLoci = nrow(allPanels[[i]]),
+										# mean (across loci) correlation
+										imputeAcc = mean(sapply(1:ncol(trueGenos), function(x) cor(trueGenos[,x], imputeCalls[,x])))))
+	rm(imputeCalls) # save some memory
+	rm(trueGenos)
+
 	# calculate GEBVs
+	# note that we are overwriting earlier variables used to calcualte GEBVs
+	g <- imputeDose[imputeDose$id %in% offspring@id,] # offpsring imputed values for ALL loci (even genotyped)
+	rownames(g) <- g$id
+	g <- as.matrix(g[,-1])
+	Amat <- A.mat(g - 1) # centering and calculating G with first method of VanRaden (2008), also Endelman and Jannik (2012)
+	p <- data.frame(id = rownames(Amat)) %>% 
+		left_join(trainPhenos %>% select(id, Trait_1) %>% rename(pheno = Trait_1), by = "id") # hard coded for first trait
+	# predict genomic breeding values
+	gebv <- kin.blup(data = p, geno = "id", pheno = "pheno", K = Amat)
+	comp <- data.frame(id = offspring@id, gv = gv(offspring)) %>% 
+		left_join(data.frame(id = names(gebv$g), gebv = gebv$g), by = "id") %>%
+		left_join(p, by = "id")
+	
+	# quick inspection of one iteration
+	# cor(comp$gv[is.na(comp$pheno)], comp$gebv[is.na(comp$pheno)])
+	# comp %>% ggplot() + aes(x = gebv, y = gv, color = is.na(pheno)) + geom_point() + 
+	# 	geom_smooth(method = "lm")
 	
 	# calc accuracy of prediction and save
-	
+	gebvRes <- gebvRes %>% rbind(data.frame(panelNum = i, 
+																					impute = TRUE, 
+																					numLoci = nrow(allPanels[[i]]), 
+																					acc = cor(comp$gv[is.na(comp$pheno)], comp$gebv[is.na(comp$pheno)])))
+
 }
 
 
