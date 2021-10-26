@@ -1,6 +1,8 @@
 # simulating GS
 # the world is your oyster
 
+# This script looks at one generation (founders and offspring)
+
 library(AlphaSimR)
 library(tidyverse)
 library(rrBLUP)
