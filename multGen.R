@@ -21,12 +21,12 @@ source("utils.R")
 # if(Sys.info()["sysname"] == "Windows") numCores <- 1
 
 # small for quick prototyping
-qtlPerChr <- 10
-neutralPerChr <- 100
+qtlPerChr <- 50
+neutralPerChr <- 500
 nChr <- 2
-nFound <- 40
+nFound <- 50
 nOffspringPerCross <- 60
-nGenerations <- 2
+nGenerations <- 3
 
 # write AlphaPeel spec file (for one chromosome)
 cat("nsnp, ", neutralPerChr, "\n", 
@@ -70,6 +70,7 @@ snpGen <- pullSnpGeno(pop[[1]]) # founder SNP genotypes
 numLoci <- unique(c(seq(100, 500, 50), seq(750, 5000, 250), seq(6000, 50000, 2000), neutralPerChr * nChr)) # number of loci in each panel to compare
 numLoci <- numLoci[numLoci <= neutralPerChr * nChr]
 numLoci <- numLoci[1:min(length(numLoci), 5)] # for quick testing
+# numLoci <- c(10, 20, 50, 100, 200, 400)
 
 snpMap <- getSnpMap()
 
@@ -169,7 +170,7 @@ for(gen in 1:nGenerations){
 											 numLoci = nrow(allPanels[[i]]),
 											 # mean (across loci) correlation
 											 imputeAcc = mean(sapply(1:ncol(trueGenos), function(x) cor(trueGenos[,x], imputeCalls[,x]))),
-											 numLociVar <- ncol(trueGenos)))
+											 numLociVar = ncol(trueGenos)))
 		rm(imputeCalls) # save some memory
 		rm(trueGenos)
 		
@@ -220,5 +221,19 @@ for(gen in 1:nGenerations){
 		pop[[gen + 2]] <- makeCross(pop[[gen + 1]], crossPlan = crossPlan, nProgeny = nOffspringPerCross)
 	}
 }
+save.image("endLoopSave_multGen.rda")
 
-
+# gebvRes
+# imputeRes
+# 
+# imputeGraph <- imputeRes %>% mutate(lociPerChrom = as.factor(numLoci / nChr), generation = as.factor(genNum)) %>%
+# 	ggplot() + aes(x = generation, y = imputeAcc, group = lociPerChrom, shape = lociPerChrom, color = lociPerChrom) +
+# 	geom_point(size = 3) + geom_line() + ylim(0.5, 1) + theme(text = element_text(size=20)) + ggtitle("Imputation accuracy")
+# 
+# gebvGraph <- gebvRes %>% mutate(lociPerChrom = as.factor(numLoci / nChr), generation = as.factor(genNum)) %>%
+# 	ggplot() + aes(x = generation, y = acc, group = lociPerChrom, shape = lociPerChrom, color = lociPerChrom) +
+# 	facet_wrap(~impute, nrow = 2) +
+# 	geom_point(size = 3) + geom_line() + theme(text = element_text(size=20)) + ggtitle("GEBV accuracy")
+# 
+# ggsave("imputeGraph.pdf", plot = imputeGraph, width = 8, height = 5)
+# ggsave("gebvGraph.pdf", plot = gebvGraph, width = 8, height = 10.5)
