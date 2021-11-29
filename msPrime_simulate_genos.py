@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-#SBATCH -t 24:00:00
-#SBATCH --cpus-per-task 5
-#SBATCH --mem=8G
+#SBATCH -t 48:00:00
+#SBATCH --cpus-per-task 72
+# default memory allocation on Ceres should be fine
 
 import msprime
 import math
@@ -15,9 +15,9 @@ def simulate(treeSeed, mutateSeed, outputPath, rateMap):
 	print("running", outputPath, "now")
 	# generate tree
 	ts = msprime.sim_ancestry(
-		samples = 10,
+		samples = 200,
 		ploidy = 2,
-		population_size = 10,
+		population_size = 12000,
 		recombination_rate = rateMap,
 		model = [
 			msprime.DiscreteTimeWrightFisher(duration=20),
@@ -36,10 +36,10 @@ def simulate(treeSeed, mutateSeed, outputPath, rateMap):
 
 def Main():
 
-	numSims = 2 # number of simulation iterations
+	numSims = 1000 # number of simulation iterations
 	
 	# setting up to simulate multiple chromosomes within each individual
-    
+  
 	genetic_length = 1 # genetic length of each chromosome in Morgans
 	r_break = math.log(2) # rate for crossovers between chromosomes
 	chrom_lengths = [32650045, # length of chromosomes
@@ -92,5 +92,8 @@ def Main():
 		process_pool.apply_async(simulate, args=(treeSeeds[i], mutationSeeds[i], "sim_pop_" + str(i + 1) + ".vcf", rate_map))
 	process_pool.close()  # close the pool to new tasks
 	process_pool.join()  # join the processes
+	# i = 0
+	# simulate(treeSeeds[i], mutationSeeds[i], "sim_pop_" + str(i + 1) + ".vcf", rate_map)
 
-Main()
+if __name__ == '__main__':
+	Main()
