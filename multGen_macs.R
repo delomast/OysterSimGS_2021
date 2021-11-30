@@ -3,8 +3,9 @@
 
 ##
 # This script looks at accuracy of and with imputation
-#   over several generations using founder haplotypes generated
-#   by msPrime
+#   over several generations
+# and uses MaCS
+# main purpose is testing
 ##
 
 library(AlphaSimR)
@@ -21,48 +22,45 @@ source("utils.R")
 # numCores <- availableCores()
 # if(Sys.info()["sysname"] == "Windows") numCores <- 1
 
-
+# small for quick prototyping
+qtlPerChr <- 50
+neutralPerChr <- 500
+nChr <- 2
+nFound <- 20
 nOffspringPerCross <- 50
 nGenerations <- 3
 
-# import founder pop from MSprime
-
-vcfHaplos <- read_vcf_for_AlphaSimR("sim_pop_1.vcf")
-vcfHaplos <- vcfHaplos[,sort(sample(1:ncol(vcfHaplos), 10000, replace =  FALSE))] # subsampling to get a small set for testing
-
-# split haplotypes into chromosomes and
-# create genetic map, each 1 Morgan long
-#  just making it proportional to position
-chrom_lengths <- c(32650045, 65668440, 61752955, 77061148, 59691872, # chromosome lengths
-	98698416, 51258098, 57830854, 75944018, 104168038)
-pos <- as.numeric(gsub("^1_", "", colnames(vcfHaplos)))
-vcfHaplo_list <- list()
-genMap <- list()
-brPoint <- 0
-for (x in chrom_lengths){
-	brPoint <- brPoint + x # cutoff point for the current chromosome
-	tempBool <- pos <= brPoint
-	vcfHaplo_list[[length(vcfHaplo_list) + 1]] <- vcfHaplos[,tempBool]
-	genMap[[length(genMap) + 1]] <- (pos[tempBool] - (brPoint - x)) / x
-	vcfHaplos <- vcfHaplos[,!tempBool] # save memory
-	pos <- pos[!tempBool]
-}
-if(ncol(vcfHaplos) > 0) warning("potential error with chromosome lengths, leftover loci")
-rm(vcfHaplos, pos, tempBool)
+# write AlphaPeel spec file (for one chromosome)
+cat("nsnp, ", neutralPerChr, "\n", 
+"inputfilepath, temp/apGeno.txt
+pedigree, temp/ped.txt
+outputfilepath, temp/apOut
+runtype, multi
+ncycles, 10
+", file = "apSpec.txt", sep = "")
 
 
+# quick founder pop for prototyping
+founderPop <- runMacs2(
+	nInd = nFound,
+	nChr = nChr,
+	segSites = qtlPerChr + neutralPerChr,
+	Ne = 12000,
+	bp = 7e+07,
+	genLen = 1,
+	mutRate = 2.5e-08,
+	histNe = c(12000, 1e+05),
+	histGen = c(100, 1e+06),
+	inbred = FALSE,
+	split = NULL,
+	ploidy = 2,
+	returnCommand = FALSE,
+	nThreads = NULL
+)
 
-# set up AlphaSimR objects
 
-founderPop <- newMapPop(genMap=genMap, haplotypes=vcfHaplo_list)
 SP <- SimParam$new(founderPop)
 SP$setTrackPed(isTrackPed = TRUE) # have AlphaSimR maintain pedigree records
-
-
-####
-# TODO: change below as needed for msPrime input
-####
-
 SP$addTraitA(nQtlPerChr = qtlPerChr)
 SP$setVarE(h2 = 0.3) # in the range of heritability for growth, meat yield, survival, etc
 SP$setSexes("yes_sys") # at the time of breeding, all individuals will only be one sex
