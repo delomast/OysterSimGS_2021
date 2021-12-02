@@ -71,6 +71,18 @@ quickChooseLoci <- function(num, genos, map){
 	return(panel)
 }
 
+
+#' random choice of SNPs
+#' 
+#' @param num number of loci desired in the panel
+#' @param genos genotypes (output of `AlphaSimR::pullSnpGeno`)
+#' @param map genetic map of loci (output of `AlphaSimR::getSnpMap`)
+randChooseLoci <- function(num, genos, map){
+	panel <- map[sort(sample(1:nrow(map), num, replace = FALSE)),]
+	return(panel)
+}
+
+
 #' read in a VCF to load into AlphaSimR
 #' splits the "chromosome" into separate chromosomes
 #' maintains phase, assumes diploidy, keeps ony biallelic loci

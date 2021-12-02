@@ -22,19 +22,32 @@ source("utils.R")
 # if(Sys.info()["sysname"] == "Windows") numCores <- 1
 
 
+# inputs
+
 nOffspringPerCross <- 50
 nGenerations <- 3
+nQTL <- 500 # total number of qtl, will be distributed proprtional to chromosome lengths
+h2 <- 0.3 # heritability
+# chromosome lengths should reflect what was simulated in msPrime and 
+# be in the same order
+chrom_lengths <- c(32650045, 65668440, 61752955, 77061148, 59691872,
+									 98698416, 51258098, 57830854, 75944018, 104168038)
+vcf_from_msPrime <- "sim_pop_1.vcf"
+
+
 
 # import founder pop from MSprime
 
-vcfHaplos <- read_vcf_for_AlphaSimR("sim_pop_1.vcf")
-vcfHaplos <- vcfHaplos[,sort(sample(1:ncol(vcfHaplos), 10000, replace =  FALSE))] # subsampling to get a small set for testing
+vcfHaplos <- read_vcf_for_AlphaSimR(vcf_from_msPrime)
+# subsampling to get a set of SNPs that represents 
+# the largest SNP chip plus the QTLs
+qtlPerChr <- round(nQTL * chrom_lengths / sum(chrom_lengths)) # sum can be slightly different that nQTL b/c of rounding error
+vcfHaplos <- vcfHaplos[,sort(sample(1:ncol(vcfHaplos), 10000 + sum(qtlPerChr), replace =  FALSE))] 
 
 # split haplotypes into chromosomes and
 # create genetic map, each 1 Morgan long
 #  just making it proportional to position
-chrom_lengths <- c(32650045, 65668440, 61752955, 77061148, 59691872, # chromosome lengths
-	98698416, 51258098, 57830854, 75944018, 104168038)
+
 pos <- as.numeric(gsub("^1_", "", colnames(vcfHaplos)))
 vcfHaplo_list <- list()
 genMap <- list()
@@ -58,33 +71,32 @@ founderPop <- newMapPop(genMap=genMap, haplotypes=vcfHaplo_list)
 SP <- SimParam$new(founderPop)
 SP$setTrackPed(isTrackPed = TRUE) # have AlphaSimR maintain pedigree records
 
-
-####
-# TODO: change below as needed for msPrime input
-####
-
 SP$addTraitA(nQtlPerChr = qtlPerChr)
-SP$setVarE(h2 = 0.3) # in the range of heritability for growth, meat yield, survival, etc
+SP$setVarE(h2 = h2) # in the range of heritability for growth, meat yield, survival, etc
 SP$setSexes("yes_sys") # at the time of breeding, all individuals will only be one sex
-SP$addSnpChip(neutralPerChr) # all non-QTL SNPs saved from simulation
+SP$addSnpChip(nSnpPerChr = sapply(vcfHaplo_list, ncol) - qtlPerChr) # all non-QTL SNPs saved from simulation
+
+
+
+# start simulation 
 
 pop <- list()
 pop[[1]] <- newPop(founderPop)
 snpGen <- pullSnpGeno(pop[[1]]) # founder SNP genotypes
 
 # SNP panel "design"
-numLoci <- unique(c(seq(100, 500, 50), seq(750, 5000, 250), seq(6000, 50000, 2000), neutralPerChr * nChr)) # number of loci in each panel to compare
-numLoci <- numLoci[numLoci <= neutralPerChr * nChr]
-numLoci <- numLoci[1:min(length(numLoci), 5)] # for quick testing
-# numLoci <- c(10, 20, 50, 100, 200, 400)
+numLoci <- unique(c(seq(100, 500, 100), 750, 1000, 2000, 5000, 10000, 15000, 30000, 60000, ncol(snpGen))) # number of loci in each panel to compare
+numLoci <- numLoci[numLoci <= sum(sapply(vcfHaplo_list, ncol), -qtlPerChr)]
 
 snpMap <- getSnpMap()
 
 # choose markers
-allPanels <- lapply(numLoci, quickChooseLoci, genos = snpGen, map = snpMap)
+# allPanels <- lapply(numLoci, quickChooseLoci, genos = snpGen, map = snpMap)
+allPanels <- lapply(numLoci, randChooseLoci, genos = snpGen, map = snpMap)
+# allPanels <- allPanels[1:3] # quick tests
 
 # initial spawning
-pop[[2]] <- randCross(pop[[1]], nCrosses = nFound/2, nProgeny = nOffspringPerCross, balance = TRUE)
+pop[[2]] <- randCross(pop[[1]], nCrosses = floor(nInd(pop[[1]])/2), nProgeny = nOffspringPerCross, balance = TRUE)
 
 trainPhenos <- data.frame()
 gebvRes <- data.frame()
@@ -136,11 +148,21 @@ for(gen in 1:nGenerations){
 		# impute
 		imputeDose <- data.frame(id = rownames(ped))
 		# for each chromosome
-		for(j in 1:nChr){
+		for(j in 1:length(chrom_lengths)){
 			tempCols <- colnames(g)[grepl(paste0("^", j, "_"), colnames(g))] # loci in chromosome j
 			write.table(g[,tempCols],
 									file = "temp/apGeno.txt", sep = " ", quote = FALSE, col.names = FALSE, 
 									row.names = TRUE)
+			
+			# write AlphaPeel spec file (for one chromosome)
+			cat("nsnp, ", length(tempCols), "\n", 
+					"inputfilepath, temp/apGeno.txt
+pedigree, temp/ped.txt
+outputfilepath, temp/apOut
+runtype, multi
+ncycles, 10
+", file = "apSpec.txt", sep = "")
+			
 			# run AlphaPeel
 			if(Sys.info()["sysname"] == "Windows"){
 				system2("AlphaPeel/AlphaPeel_windows.exe", args = "apSpec.txt")
@@ -164,9 +186,10 @@ for(gen in 1:nGenerations){
 		
 		# filter out nonvariable loci
 		# loci can become fixed during the simulation
-		temp <- colSums(trueGenos)
-		temp <- temp > 0 & temp < (2*nrow(trueGenos))
-		trueGenos <- trueGenos[,temp]
+		# and occasionally imputation will return the same genotype for all individuals
+		# correlation is undefined (0/0) when either variable is constant
+		temp <- (apply(trueGenos, 2, n_distinct) > 1) & (apply(imputeCalls, 2, n_distinct) > 1)
+		trueGenos <- trueGenos[,temp ]
 		imputeCalls <- imputeCalls[,temp]
 		rm(temp)
 		
@@ -227,7 +250,8 @@ for(gen in 1:nGenerations){
 		pop[[gen + 2]] <- makeCross(pop[[gen + 1]], crossPlan = crossPlan, nProgeny = nOffspringPerCross)
 	}
 }
-save.image("endLoopSave_multGen.rda")
+
+save.image("endLoopSave_multGen_msPrime.rda")
 
 # gebvRes
 # imputeRes
