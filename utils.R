@@ -25,7 +25,8 @@ sibTestEqual <- function(fam, propTest){
 }
 
 #' simple heuristic to choose markers for a genetic panel
-#' this is mainly for prototyping, more sophisticated processes should probably be used
+#' this is mainly for prototyping, more sophisticated and quicker (at large scales) 
+#' processes should be used
 #' 
 #' moves a window step wise along each chromosome and picks the highest variability marker in that window.
 #' window size is calculated as numLoci/genetic length.
@@ -71,6 +72,86 @@ quickChooseLoci <- function(num, genos, map){
 	return(panel)
 }
 
+#' Score function for greedy algorithm
+#' from Matukumalli et al. 2009 https://doi.org/10.1371/journal.pone.0005350
+#' @param start start of interval
+#' @param end end of interval
+#' @param maf maf of markers within interval
+#' @param pos position of marker within interval (order
+#'   corresponds to order of `maf`)
+scoreGreedy <- function(start, end, maf, pos){
+	return(
+		maf * (end - start - abs((2 * pos) - end - start))
+	)
+}
+
+
+# num = snpMap %>% select(chr) %>% distinct %>% mutate(num = 1000)
+
+#' greedy algorithm to choose markers for a genetic panel
+#' from Matukumalli et al. 2009 https://doi.org/10.1371/journal.pone.0005350
+#' Assumes there are enough SNPs in each chromosome to meet the requested number
+#' Note that it will not choose the first or last marker on the chromosome until
+#' the very end
+#' 
+#' 
+#' @param num data.frame with chromosome name (in map) in the first column and
+#'   number of loci to choose in the second column
+#' @param genos genotypes (output of `AlphaSimR::pullSnpGeno`)
+#' @param map genetic map of loci (output of `AlphaSimR::getSnpMap`)
+greedyChooseLoci <- function(num, genos, map){
+	colnames(num) <- c("chr", "num")
+	# calc minor allele freq
+	maf <- (colSums(genos) / (2 * nrow(genos)))
+	maf[maf > 0.5] <- 1 - maf[maf > 0.5]
+	map <- map %>% left_join(data.frame(maf = maf, id = names(maf)), by = "id") 
+
+	panel <- data.frame()
+	for(i in 1:nrow(num)){ # for each chr
+		cands <- map %>% filter(chr == num$chr[i])
+		if(nrow(cands) < num$num[i]){
+			warning("Not enough SNPs in chromosome ", num$chr[i])
+			break
+		}
+		# calculate scores at the start
+		cands <- cands %>% 
+			mutate(score = scoreGreedy(start = 0, end = max(.[["pos"]]), maf = maf, pos = pos),
+						 lastStart = 0,
+						 lastEnd = max(.[["pos"]]))
+		numSNPs <- 0
+		while(TRUE){ # for each desired SNP
+			# choose SNP
+			temp <- which.max(cands$score)
+			chosen <- cands %>% slice(temp)
+			panel <- panel %>% bind_rows(chosen)
+			cands <- cands[-temp,]
+			numSNPs <- numSNPs + 1
+			if(numSNPs == num$num[i]) break
+
+			# recalculate scores for affected SNPs
+			# only those whose interval used for the last calculation are affected
+			# note that there is only one interval to update b/c the new SNP can only
+			# have been in one interval
+			toUpdate <- cands %>% filter(lastStart < chosen$pos & lastEnd > chosen$pos) %>%
+				select(lastStart, lastEnd) %>% distinct() # this is some bs to help vectorize operations for R
+			tempBool <- cands$lastStart == toUpdate$lastStart & cands$pos < chosen$pos
+			cands$score[tempBool] <- scoreGreedy(start = toUpdate$lastStart,
+																					 end = chosen$pos,
+																					 maf = cands$maf[tempBool],
+																					 pos = cands$pos[tempBool])
+			cands$lastEnd[tempBool] <- chosen$pos
+			tempBool <- cands$lastStart == toUpdate$lastStart & cands$pos > chosen$pos
+			cands$score[tempBool] <- scoreGreedy(start = chosen$pos,
+																					 end = toUpdate$lastEnd,
+																					 maf = cands$maf[tempBool],
+																					 pos = cands$pos[tempBool])
+			cands$lastStart[tempBool] <- chosen$pos
+		}
+	}
+	return(panel)
+}
+
+
 
 #' random choice of SNPs
 #' 
@@ -78,6 +159,8 @@ quickChooseLoci <- function(num, genos, map){
 #' @param genos genotypes (output of `AlphaSimR::pullSnpGeno`)
 #' @param map genetic map of loci (output of `AlphaSimR::getSnpMap`)
 randChooseLoci <- function(num, genos, map){
+	varSNPs <- colnames(genos)[!colSums(genos) %in% c(0,nrow(genos) * 2)]
+	map <- map[map$id %in% varSNPs,] # select only from variable SNPs
 	panel <- map[sort(sample(1:nrow(map), num, replace = FALSE)),]
 	return(panel)
 }

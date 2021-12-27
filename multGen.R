@@ -5,6 +5,11 @@
 # This script looks at accuracy of and with imputation
 #   over several generations using founder haplotypes generated
 #   by msPrime
+#   msPrime was very slow and the Ne should be bumped up to give
+#   more realistic results, which would make it too slow to reasonably
+#   use for this
+#   also produced maybe 1/100 files that was way too small
+#   unclear what is causing that
 ##
 
 library(AlphaSimR)

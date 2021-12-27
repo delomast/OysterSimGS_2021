@@ -4,8 +4,7 @@
 ##
 # This script looks at accuracy of and with imputation
 #   over several generations
-# and uses MaCS
-# main purpose is testing
+#   and uses MaCS
 ##
 
 library(AlphaSimR)
@@ -22,33 +21,24 @@ source("utils.R")
 # numCores <- availableCores()
 # if(Sys.info()["sysname"] == "Windows") numCores <- 1
 
-# small for quick prototyping
-qtlPerChr <- 50
-neutralPerChr <- 500
-nChr <- 2
-nFound <- 20
+qtlPerChr <- 100
+neutralPerChr <- 5000 # in the maximum SNP chip
+nChr <- 10
+macsPop <- 1000
+
+nFound <- 200
 nOffspringPerCross <- 50
 nGenerations <- 3
 
-# write AlphaPeel spec file (for one chromosome)
-cat("nsnp, ", neutralPerChr, "\n", 
-"inputfilepath, temp/apGeno.txt
-pedigree, temp/ped.txt
-outputfilepath, temp/apOut
-runtype, multi
-ncycles, 10
-", file = "apSpec.txt", sep = "")
-
-
-# quick founder pop for prototyping
+# simulate founder population
 founderPop <- runMacs2(
-	nInd = nFound,
+	nInd = macsPop,
 	nChr = nChr,
-	segSites = qtlPerChr + neutralPerChr,
+	segSites = round(1e6 / nChr), # a discovery set that you then select SNPs from
 	Ne = 12000,
 	bp = 7e+07,
 	genLen = 1,
-	mutRate = 2.5e-08,
+	mutRate = 4e-08, # higher mutation rate to reflect presumed higher rate in oysters
 	histNe = c(12000, 1e+05),
 	histGen = c(100, 1e+06),
 	inbred = FALSE,
@@ -58,28 +48,55 @@ founderPop <- runMacs2(
 	nThreads = NULL
 )
 
-
 SP <- SimParam$new(founderPop)
 SP$setTrackPed(isTrackPed = TRUE) # have AlphaSimR maintain pedigree records
 SP$addTraitA(nQtlPerChr = qtlPerChr)
 SP$setVarE(h2 = 0.3) # in the range of heritability for growth, meat yield, survival, etc
 SP$setSexes("yes_sys") # at the time of breeding, all individuals will only be one sex
-SP$addSnpChip(neutralPerChr) # all non-QTL SNPs saved from simulation
+SP$addSnpChip(qtlPerChr + neutralPerChr * 2 ) # all non-QTL SNPs saved from simulation
+
+
+# random breeding to give realistic LD between chromosomes
+# note that some SNPs may be fixed due to drift during this process
+prePop <- newPop(founderPop)
+for(i in 1:9) prePop <- randCross(prePop, nCrosses = macsPop/2, nProgeny = 2, balance = TRUE)
 
 pop <- list()
-pop[[1]] <- newPop(founderPop)
+# pull founders from simulated pop while avoiding full and half sibs
+pop[[1]] <- randCross(prePop, nCrosses = nFound, nProgeny = 1, balance = TRUE)
 snpGen <- pullSnpGeno(pop[[1]]) # founder SNP genotypes
 
+# number of variable SNPs in the population at the start
+nVarStart <- sum(!colSums(snpGen) %in% c(0,nrow(snpGen) * 2))
+
 # SNP panel "design"
-numLoci <- unique(c(seq(100, 500, 50), seq(750, 5000, 250), seq(6000, 50000, 2000), neutralPerChr * nChr)) # number of loci in each panel to compare
-numLoci <- numLoci[numLoci <= neutralPerChr * nChr]
-numLoci <- numLoci[1:min(length(numLoci), 5)] # for quick testing
-# numLoci <- c(10, 20, 50, 100, 200, 400)
+
+# number of loci in each panel to compare
+numLoci <- sort(unique(c(seq(100, 500, 100), 750, 1000, 2000, 5000, 10000, 15000, 25000, neutralPerChr * nChr)))
+if(any(numLoci > nVarStart)) {
+	warning("not enough SNPs to choose from")
+	# break current iteration in parallel here
+}
+# numLoci <- numLoci[c(1, length(numLoci))] # for quick testing
 
 snpMap <- getSnpMap()
 
 # choose markers
-allPanels <- lapply(numLoci, quickChooseLoci, genos = snpGen, map = snpMap)
+tempNum <- lapply(numLoci, function(x){
+	dfOut <- data.frame(chr = 1:nChr, num = round(x/nChr)) # all chr equal length in this sim
+	# account for rounding error
+	diff <- x - sum(dfOut$num)
+	if(diff > 0){
+		temp <- sample(1:nChr, size = diff, replace = FALSE)
+		dfOut$num[temp] <- dfOut$num[temp] + 1
+	} else if (diff < 0){
+		temp <- sample(1:nChr, size = -diff, replace = FALSE)
+		dfOut$num[temp] <- dfOut$num[temp] - 1
+	}
+	return(dfOut)
+})
+allPanels <- lapply(tempNum, greedyChooseLoci, genos = snpGen, map = snpMap)
+# allPanels <- lapply(numLoci, randChooseLoci, genos = snpGen, map = snpMap) # for quick testing
 
 # initial spawning
 pop[[2]] <- randCross(pop[[1]], nCrosses = nFound/2, nProgeny = nOffspringPerCross, balance = TRUE)
@@ -118,13 +135,19 @@ for(gen in 1:nGenerations){
 		# AlphaPeel
 		
 		# make inputs
-		ped <- SP$pedigree[,1:2]
+		ped <- SP$pedigree[,1:2] # full pedigree
+		# only get inds starting with founder pop
+		allInds <- c()
+		for(j in 1:length(pop)) allInds <- c(allInds, pop[[j]]@id)
+		ped <- ped[allInds,]
+		# pretend you don't know parents of founders
+		ped[pop[[1]]@id,1:2] <- 0
 		write.table(ped, file = "temp/ped.txt", sep = " ", quote = FALSE, col.names = FALSE, 
 								row.names = TRUE)
 		
-		# get all genotypes
-		g <- pullSnpGeno(pop[[1]])
-		for(j in 2:length(pop)) g <- rbind(g, pullSnpGeno(pop[[j]]))
+		# get all genotypes for maximum size panel - assumed at the end of allPanels
+		g <- pullSnpGeno(pop[[1]])[,allPanels[[length(allPanels)]]$id]
+		for(j in 2:length(pop)) g <- rbind(g, pullSnpGeno(pop[[j]])[,allPanels[[length(allPanels)]]$id])
 		trueGenos <- g[as.character(pop[[gen + 1]]@id),]
 		# get id's for inds with high-density genotypes (parents)
 		highDensInds <- unique(c(ped[,1], ped[,2]))
@@ -139,9 +162,18 @@ for(gen in 1:nGenerations){
 			write.table(g[,tempCols],
 									file = "temp/apGeno.txt", sep = " ", quote = FALSE, col.names = FALSE, 
 									row.names = TRUE)
+			# write AlphaPeel spec file (for one chromosome)
+			cat("nsnp, ", length(tempCols), "\n", 
+					"inputfilepath, temp/apGeno.txt
+pedigree, temp/ped.txt
+outputfilepath, temp/apOut
+runtype, multi
+ncycles, 10
+", file = "temp/apSpec.txt", sep = "")
+			
 			# run AlphaPeel
 			if(Sys.info()["sysname"] == "Windows"){
-				system2("AlphaPeel/AlphaPeel_windows.exe", args = "apSpec.txt")
+				system2("AlphaPeel/AlphaPeel_windows.exe", args = "temp/apSpec.txt")
 			} else {
 				stop("OS not set up")
 			}
@@ -162,9 +194,10 @@ for(gen in 1:nGenerations){
 		
 		# filter out nonvariable loci
 		# loci can become fixed during the simulation
-		temp <- colSums(trueGenos)
-		temp <- temp > 0 & temp < (2*nrow(trueGenos))
-		trueGenos <- trueGenos[,temp]
+		# and occasionally imputation will return the same genotype for all individuals
+		# correlation is undefined (0/0) when either variable is constant
+		temp <- (apply(trueGenos, 2, n_distinct) > 1) & (apply(imputeCalls, 2, n_distinct) > 1)
+		trueGenos <- trueGenos[,temp ]
 		imputeCalls <- imputeCalls[,temp]
 		rm(temp)
 		

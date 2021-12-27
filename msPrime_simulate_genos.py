@@ -1,7 +1,4 @@
-#!/usr/bin/env python
-#SBATCH -t 48:00:00
-#SBATCH --cpus-per-task 72
-# default memory allocation on Ceres should be fine
+# running on bluewaves, request 20 threads and 120G
 
 import msprime
 import math
@@ -17,7 +14,7 @@ def simulate(treeSeed, mutateSeed, outputPath, rateMap):
 	ts = msprime.sim_ancestry(
 		samples = 200,
 		ploidy = 2,
-		population_size = 12000,
+		population_size = 10000,
 		recombination_rate = rateMap,
 		model = [
 			msprime.DiscreteTimeWrightFisher(duration=20),
@@ -85,15 +82,18 @@ def Main():
 	except KeyError:
 		threads = mp.cpu_count()
 	print("detected", threads, "threads available")
-
+	
+	# make output directory if needed
+	if not os.path.isdir("msPrimeVCFs"):
+		os.mkdir("msPrimeVCFs")
+	
 	# run simulations in parallel
 	process_pool = mp.Pool(processes = min(threads, numSims)) # start process pool
 	for i in range(0, numSims, 1):
-		process_pool.apply_async(simulate, args=(treeSeeds[i], mutationSeeds[i], "sim_pop_" + str(i + 1) + ".vcf", rate_map))
+		process_pool.apply_async(simulate, args=(treeSeeds[i], mutationSeeds[i], "msPrimeVCFs/sim_pop_" + str(i + 1) + ".vcf", rate_map))
 	process_pool.close()  # close the pool to new tasks
 	process_pool.join()  # join the processes
-	# i = 0
-	# simulate(treeSeeds[i], mutationSeeds[i], "sim_pop_" + str(i + 1) + ".vcf", rate_map)
+	
 
 if __name__ == '__main__':
 	Main()
