@@ -18,6 +18,7 @@ cmdArgs <- commandArgs(trailingOnly=TRUE)
 #' @param iterationNumber used to set unique file output names
 randSeed <- cmdArgs[1]
 iterationNumber <- cmdArgs[2]
+localTempDir <- cmdArgs[3]
 
 set.seed(randSeed)
 
@@ -106,7 +107,7 @@ baseAlleleFreqs <- lapply(allPanels, function(x){
 # initial spawning
 pop[[2]] <- randCross(pop[[1]], nCrosses = nFound/2, nProgeny = nOffspringPerCross, balance = TRUE)
 
-if(!dir.exists(paste0("temp", iterationNumber))) dir.create(paste0("temp", iterationNumber))
+if(!dir.exists(paste0(localTempDir, "/", temp, iterationNumber))) dir.create(paste0(localTempDir, "/", "temp", iterationNumber))
 trainPhenos <- data.frame()
 gebvRes <- data.frame()
 imputeRes <- data.frame()
@@ -148,8 +149,8 @@ for(gen in 1:nGenerations){
 		ped <- ped[allInds,]
 		# pretend you don't know parents of founders
 		ped[pop[[1]]@id,1:2] <- 0
-		write.table(ped, file = paste0("temp", iterationNumber, "/ped.txt"), sep = " ", quote = FALSE, col.names = FALSE, 
-								row.names = TRUE)
+		write.table(ped, file = paste0(localTempDir, "/", "temp", iterationNumber, "/ped.txt"),
+								sep = " ", quote = FALSE, col.names = FALSE, row.names = TRUE)
 		
 		# get all genotypes for maximum size panel - assumed at the end of allPanels
 		g <- pullSnpGeno(pop[[1]])[,allPanels[[length(allPanels)]]$id]
@@ -166,27 +167,23 @@ for(gen in 1:nGenerations){
 		for(j in 1:nChr){
 			tempCols <- colnames(g)[grepl(paste0("^", j, "_"), colnames(g))] # loci in chromosome j
 			write.table(g[,tempCols],
-									file = paste0("temp", iterationNumber, "/apGeno.txt"), sep = " ", quote = FALSE, col.names = FALSE, 
+									file = paste0(localTempDir, "/", "temp", iterationNumber, "/apGeno.txt"), 
+									sep = " ", quote = FALSE, col.names = FALSE, 
 									row.names = TRUE)
 			# write AlphaPeel spec file (for one chromosome)
 			cat("nsnp, ", length(tempCols), "\n", 
-					"inputfilepath, temp", iterationNumber, "/apGeno.txt
-pedigree, temp", iterationNumber, "/ped.txt
-outputfilepath, temp", iterationNumber, "/apOut
+					"inputfilepath, ", localTempDir, "/","temp", iterationNumber, "/apGeno.txt
+pedigree, ", localTempDir, "/", "temp", iterationNumber, "/ped.txt
+outputfilepath, ", localTempDir, "/", "temp", iterationNumber, "/apOut
 runtype, multi
 ncycles, 10
-", file = paste0("temp", iterationNumber, "/apSpec.txt"), sep = "")
+", file = paste0(localTempDir, "/", "temp", iterationNumber, "/apSpec.txt"), sep = "")
 			
 			# run AlphaPeel
-			if(Sys.info()["sysname"] == "Windows"){
-				system2("AlphaPeel/AlphaPeel_windows.exe", args = paste0("temp", iterationNumber, "/apSpec.txt"))
-			} else if(Sys.info()["sysname"] == "Linux"){
-				system2("AlphaPeel/AlphaPeel_linux", args = paste0("temp", iterationNumber, "/apSpec.txt"))
-			} else {
-				stop("OS not set up")
-			}
+			system2("AlphaPeel/AlphaPeel_linux", args = paste0(localTempDir, "/", "temp", iterationNumber, "/apSpec.txt"))
+
 			# load results
-			tempImputeDose <- read.table(paste0("temp", iterationNumber, "/apOut.dosages"))
+			tempImputeDose <- read.table(paste0(localTempDir, "/", "temp", iterationNumber, "/apOut.dosages"))
 			colnames(tempImputeDose) <- c("id", tempCols)
 			imputeDose <- imputeDose %>% 
 				left_join(tempImputeDose %>% mutate(id = as.character(id)), by = "id")

@@ -1,6 +1,7 @@
 #!/bin/bash
 # run simulations with macs for
 # performance of different SNP panel sizes
+# written for execution on Ceres
 #SBATCH --cpus-per-task=1  # ask for 1 cpu
 #SBATCH --mem=20G # Maximum amount of memory this job will be given
 #SBATCH --time=24:00:00 # ask that the job be allowed to run for 
@@ -22,6 +23,7 @@ x=$(cat randSeeds.txt | sed -n ${SLURM_ARRAY_TASK_ID}p)
 echo "My random seed is: " $x
 
 # run simulation
-Rscript multGen_macs_HPC_array.R $x $SLURM_ARRAY_TASK_ID
+# randomSeed iterationNumber TemporaryLocalStorageDirectory
+Rscript multGen_macs_HPC_array.R $x $SLURM_ARRAY_TASK_ID $TMPDIR
 
 echo "Done with simulation"
