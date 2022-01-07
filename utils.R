@@ -2,6 +2,25 @@
 
 library(dplyr)
 library(stringr)
+library(optiSel)
+
+#' create G matrix with specified base pop frequencies
+#' first method of VanRaden (2008), also Endelman and Jannink (2012)
+#' @param g genotypes with rows inds, cols loci, coded as 0,1,2, no missing data allowed
+#' @param af base generation frequencies of the non reference allele (the allele whose dosage the number corresponds to)
+#'   in the same order as the columns of `genos`
+createG <- function(g, af){
+	if(length(af) != ncol(g)) stop("wrong af length for number of loci")
+	# P matrix in VanRaden (2008)
+	p <- matrix(2*(af - 0.5), nrow = nrow(g), ncol = ncol(g), byrow = TRUE)
+	return(
+		# subtract 1 to convert to -1,0-1 creating M,
+		# then subtract P from M to create Z
+		# then ZZ' and divide by P to scale G analagous to A
+		tcrossprod((g - 1) - p) / (2 * sum(af *(1 - af)))
+	)
+}
+
 
 #' function to apply full-sib family testing with an AlphaSimR object
 #' pulls ID's and phenotypes for specified proportion (rounded) of individuals from each
@@ -148,7 +167,7 @@ greedyChooseLoci <- function(num, genos, map){
 			cands$lastStart[tempBool] <- chosen$pos
 		}
 	}
-	return(panel)
+	return(panel %>% arrange(chr, site))
 }
 
 
@@ -226,4 +245,73 @@ read_vcf_for_AlphaSimR <- function(vcfPath, numLines = 20000){
 	rownames(allGenos) <- temp_rn
 	
 	return(allGenos)
+}
+
+#' using results of `opticont` from `optiSel` package
+#' calculate number of matings for each individual with proper rounding
+#' distributes rounding error randomly according to weights
+#' but with no individual having more than 1 randomly allocated
+#' to it
+#' @param ocsParent $parent componenet of optisolve result
+#' @param N number of matings to perform
+calcNumMatings <- function(ocsParent, N){
+	# males
+	males <- ocsParent %>% filter(Sex == "male") %>% 
+		mutate(n = round(2 * N * oc))
+	diff <- N - sum(males$n)
+	if(diff != 0){
+		temp <- sample(1:nrow(males), size = abs(diff), prob = males$n, replace = FALSE)
+		if(diff > 0) males$n[temp] <- males$n[temp] + 1
+		if(diff < 0) males$n[temp] <- males$n[temp] - 1
+	}
+	# females
+	females <- ocsParent %>% filter(Sex == "female") %>% 
+		mutate(n = round(2 * N * oc))
+	diff <- N - sum(females$n)
+	if(diff != 0){
+		temp <- sample(1:nrow(females), size = abs(diff), prob = females$n, replace = FALSE)
+		if(diff > 0) females$n[temp] <- females$n[temp] + 1
+		if(diff < 0) females$n[temp] <- females$n[temp] - 1
+	}
+	
+	return(rbind(males, females))
+}
+
+#' Calculate the maximum mean kinship corresponding to 
+#' a given effective population size and starting mean
+#' kinship
+#' @param kBar mean kinship at time 0
+#' @param Ne desired effective population size
+#' @param t0 start time
+#' @param t end time
+#' @param L generation length (time)
+ubKin <- function(kBar, Ne, t0 = 0, t = 1, L = 1){
+	return(1 - ((1 - kBar)*((1 - (1 / (2*Ne)))^((t - t0)/L))))
+}
+
+#' choose matings with OCS followed by inbreeding 
+#' minimization
+#' @param ocsData a data frame with each row corresponding to
+#'   a selection candidate. Columns are Indiv, Sex (male and female)
+#'   and gebv
+#' @param Gmat genomic relationship matrix (the function internally converts
+#'   this to the coancestry matrix)
+#' @param N the number of matings to be performed
+#' @param Ne the desired minimum effective population size
+runOCS <- function(ocsData, Gmat, N, Ne = 50){
+	# convert to coancestry/kinship matrix
+	# and making sure order/presence of individuals is correct
+	Gmat <- Gmat[ocsData$Indiv,ocsData$Indiv] / 2
+	# data processing
+	ocsCandes <- candes(phen = ocsData, N = N * 2, kin = Gmat)
+	# optimum contributions
+	ocsContrib <- opticont(method = "max.gebv", cand = ocsCandes, 
+												 con = list(ub.kin = ubKin(kBar = ocsCandes$mean$kin, Ne = Ne)), 
+												 trace=FALSE)
+	# calculate number of matings per individual from contribution proportions
+	ocsMatings <- calcNumMatings(ocsParent = ocsContrib$parent, N = N)
+	# assign crosses (limit each pair to one cross)
+	# to minimize inbreeding of each family
+	crosses <- matings(ocsMatings, Kin=Amat[ocsMatings$Indiv,ocsMatings$Indiv], ub.n = 1)
+	return(crosses)
 }
