@@ -10,7 +10,7 @@
 
 echo "My SLURM_ARRAY_TASK_ID: " $SLURM_ARRAY_TASK_ID
 
-module load r/
+module load r/4.1.2
 
 # check for random seeds
 if [ ! -f randSeeds.txt ]; then
