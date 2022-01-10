@@ -312,6 +312,6 @@ runOCS <- function(ocsData, Gmat, N, Ne = 50){
 	ocsMatings <- calcNumMatings(ocsParent = ocsContrib$parent, N = N)
 	# assign crosses (limit each pair to one cross)
 	# to minimize inbreeding of each family
-	crosses <- matings(ocsMatings, Kin=Amat[ocsMatings$Indiv,ocsMatings$Indiv], ub.n = 1)
+	crosses <- matings(ocsMatings, Kin=Gmat, ub.n = 1)
 	return(crosses)
 }
