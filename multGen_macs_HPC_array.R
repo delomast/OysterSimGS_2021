@@ -109,6 +109,10 @@ tempNum <- lapply(numLoci, function(x){
 	}
 	return(dfOut)
 })
+# optimization opportunity:
+# by applying the greedy algorithm to all panels, you are repeating computation
+# could apply to the largest panel and then rank by score within each chromosome
+# and take the top X to produce smaller panels
 allPanels <- lapply(tempNum, greedyChooseLoci, genos = snpGen, map = snpMap)
 
 print(Sys.time())
@@ -123,7 +127,7 @@ baseAlleleFreqs <- lapply(allPanels, function(x){
 # initial spawning
 pop[[2]] <- randCross(pop[[1]], nCrosses = nFound/2, nProgeny = nOffspringPerCross, balance = TRUE)
 
-if(!dir.exists(paste0(localTempDir, "/", temp, iterationNumber))) dir.create(paste0(localTempDir, "/", "temp", iterationNumber))
+if(!dir.exists(paste0(localTempDir, "/", "temp", iterationNumber))) dir.create(paste0(localTempDir, "/", "temp", iterationNumber))
 trainPhenos <- data.frame()
 gebvRes <- data.frame()
 imputeRes <- data.frame()
