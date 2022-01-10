@@ -1,6 +1,0 @@
-nsnp, 500
-inputfilepath, temp/apGeno.txt
-pedigree, temp/ped.txt
-outputfilepath, temp/apOut
-runtype, multi
-ncycles, 10

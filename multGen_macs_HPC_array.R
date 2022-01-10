@@ -4,6 +4,10 @@
 # It is meant to be called by Rscript as part of a
 # slurm array job
 
+print(Sys.time())
+print("begin")
+
+.libPaths(c(.libPaths(), "/project/oyster_gs_sim/R_packages/4.1/"))
 library(AlphaSimR, lib.loc="/project/oyster_gs_sim/R_packages/4.1/")
 library(tidyverse, lib.loc="/project/oyster_gs_sim/R_packages/4.1/")
 library(rrBLUP, lib.loc="/project/oyster_gs_sim/R_packages/4.1/")
@@ -31,6 +35,9 @@ nFound <- 200
 nOffspringPerCross <- 50
 nGenerations <- 3
 
+print(Sys.time())
+print("begin macs")
+
 # simulate founder population
 founderPop <- runMacs2(
 	nInd = macsPop,
@@ -49,12 +56,15 @@ founderPop <- runMacs2(
 	nThreads = NULL
 )
 
+print(Sys.time())
+print("end macs")
+
 SP <- SimParam$new(founderPop)
 SP$setTrackPed(isTrackPed = TRUE) # have AlphaSimR maintain pedigree records
 SP$addTraitA(nQtlPerChr = qtlPerChr)
 SP$setVarE(h2 = 0.3) # in the range of heritability for growth, meat yield, survival, etc
 SP$setSexes("yes_sys") # at the time of breeding, all individuals will only be one sex
-SP$addSnpChip((round(1e6 / nChr) - qtlPerChr) * nChr) # all non-QTL SNPs saved from simulation
+SP$addSnpChip(nSnpPerChr = round(1e6 / nChr) - qtlPerChr) # all non-QTL SNPs saved from simulation
 
 
 # random breeding to give realistic LD between chromosomes
@@ -69,6 +79,9 @@ snpGen <- pullSnpGeno(pop[[1]]) # founder SNP genotypes
 
 # number of variable SNPs in the population at the start
 nVarStart <- sum(!colSums(snpGen) %in% c(0,nrow(snpGen) * 2))
+
+print(Sys.time())
+print("begin panel design")
 
 # SNP panel "design"
 
@@ -98,6 +111,9 @@ tempNum <- lapply(numLoci, function(x){
 })
 allPanels <- lapply(tempNum, greedyChooseLoci, genos = snpGen, map = snpMap)
 
+print(Sys.time())
+print("end panel design")
+
 # save allele freqs in base pop for each panel for calculation of G
 baseAlleleFreqs <- lapply(allPanels, function(x){
 	tempgenos <- snpGen[,x$id]
@@ -112,10 +128,14 @@ trainPhenos <- data.frame()
 gebvRes <- data.frame()
 imputeRes <- data.frame()
 for(gen in 1:nGenerations){
+	print(Sys.time())
+	print(paste("begin gen: ", gen))
 	# phenotype training pop (sibs) of current generation adn add to phenotype data set
 	trainPhenos <- rbind(trainPhenos, sibTestEqual(fam = pop[[gen + 1]], propTest = 0.6)) # phenotype 30, select from 20
 	
 	for(i in 1:length(allPanels)){
+		print(Sys.time())
+		print(paste("begin panel: ", i))
 		# get all genotypes at smaller panel
 		g <- pullSnpGeno(pop[[1]])[,allPanels[[i]]$id]
 		for(j in 2:length(pop)) g <- rbind(g, pullSnpGeno(pop[[j]])[,allPanels[[i]]$id])
@@ -140,7 +160,8 @@ for(gen in 1:nGenerations){
 		# impute
 		
 		# AlphaPeel
-		
+		print(Sys.time())
+		print("begin impute")
 		# make inputs
 		ped <- SP$pedigree[,1:2] # full pedigree
 		# only get inds starting with founder pop
@@ -188,6 +209,9 @@ ncycles, 10
 			imputeDose <- imputeDose %>% 
 				left_join(tempImputeDose %>% mutate(id = as.character(id)), by = "id")
 		}
+		
+		print(Sys.time())
+		print("end impute")
 		
 		# calc imputation accuracy and save
 		# although we will discuss that this means very little for GS (Calus et al 2014 doi:10.1017/S1751731114001803)
@@ -240,6 +264,8 @@ ncycles, 10
 	
 	# make next generation
 	if(gen < nGenerations){
+		print(Sys.time())
+		print("begin ocs")
 		# OCS with lagrangian
 		selCands <- comp %>% filter(is.na(pheno)) %>% pull(id)
 		ocsData <- data.frame(Indiv = pop[[gen + 1]]@id, Sex = if_else(pop[[gen + 1]]@sex == "M", "male", "female")) %>%
@@ -247,7 +273,8 @@ ncycles, 10
 			filter(Indiv %in% selCands)
 		matingPlan <- runOCS(ocsData = ocsData, Gmat = Amat[ocsData$Indiv,ocsData$Indiv], 
 												 N = nFound / 2, Ne = 50)
-		
+		print(Sys.time())
+		print("end ocs")
 		# create next generation
 		pop[[gen + 2]] <- makeCross(pop[[gen + 1]], crossPlan = as.matrix(matingPlan[,1:2]), nProgeny = nOffspringPerCross)
 	}
