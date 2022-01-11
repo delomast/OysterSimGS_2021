@@ -6,7 +6,7 @@
 #SBATCH --mem=20G # Maximum amount of memory this job will be given
 #SBATCH --time=24:00:00 # ask that the job be allowed to run for 
 #SBATCH --array=1-2%2 #specify how many jobs in the array and limit number running concurrently (e.g. 1-96%40)
-#SBATCH --output=arrayMacs_%a.out # tell it where to store the output console text
+#SBATCH --output=arrayScrm_%a.out # tell it where to store the output console text
 
 echo "My SLURM_ARRAY_TASK_ID: " $SLURM_ARRAY_TASK_ID
 
@@ -34,8 +34,10 @@ echo "begin scrm"
 # 3 mutation rate per base, 
 # 4 expected number of recombinations per chromosome per generation,
 # 5 output file prefix
-# 6 random seed
-bash ./sim_oyster_genos_scrm.sh 400 20000 0.00000008 1 "$TMPDIR"/temp"$SLURM_ARRAY_TASK_ID"/ $x
+# 6 random seed (consecutive seeds starting at $6 + 1 are used)
+# These parameters yield about 1 SNP / 50 bp, which is in line with estimates for Pacific oyster (Sauvage et a. 2007)
+# may be a little under for easter oysters, but the easter oyster study was a much smaller dataset
+bash ./sim_oyster_genos_scrm.sh 400 20000 0.00000004 1 "$TMPDIR"/temp"$SLURM_ARRAY_TASK_ID"/ $x
 date
 echo "end scrm"
 

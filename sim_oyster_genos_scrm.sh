@@ -8,7 +8,7 @@
 # 3 mutation rate per base, 
 # 4 expected number of recombinations per chromosome per generation,
 # 5 output file prefix
-# 6 random seed
+# 6 random seed (consecutive seeds starting at $6 + 1 are used)
 
 # activate conda environment containing scrm
 module load miniconda
@@ -24,5 +24,5 @@ for len in "${chrom_lengths[@]}"; do
 	t=$(awk "BEGIN {print 4*$2*$3*$len}")
 	# calculate 4*Ne*r
 	R=$(awk "BEGIN {print 4*$2*$4}")
-	scrm $1 1 -t $t -r $R $len -l 200r -seed $6 > "$5"chr"$i".txt
+	scrm $1 1 -t $t -r $R $len -l 200r -seed $(($6 + $i)) > "$5"chr"$i".txt
 done
