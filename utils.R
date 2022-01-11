@@ -315,3 +315,41 @@ runOCS <- function(ocsData, Gmat, N, Ne = 50){
 	crosses <- matings(ocsMatings, Kin=Gmat, ub.n = 1)
 	return(crosses)
 }
+
+#' read in scrm output to load into AlphaSimR
+#' reads in one chromosome (one file), filters by maf, and
+#' selects a random subset of loci
+#' maintains phase, assumes diploidy, and scrm (should) only yield biallelic loci
+#' assumes no missing genotypes (these are being treated as "true" to start a
+#' simulation)
+#' outputs as a matrix with rows haplotypes and columns loci
+#' @param path path to the input file
+#' @param numLoci number of loci to randomly sample (if < 1, no subsampling is performed)
+#' @param min_maf minimum maf to keep a locus
+#' @return a matrix with rows as haplotypes (adjacent rows are individuals) and cols as loci
+read_scrm_for_AlphaSimR <- function(path, numLoci, min_maf = 0.05){
+	
+	f <- file(path, "r") # open vcf
+	on.exit(close(f))
+	# move to end of header
+	line <- readLines(f, n = 1)
+	while(length(line) > 0){
+		if(substr(line, 1, 9) == "positions") break
+		line <- readLines(f, n = 1)
+	}
+	# read in locus positions
+	pos <- str_split(line, " ")[[1]][-1]
+	pos <- pos[pos != ""] # remove any blanks at the end
+	haplos <- readLines(f)
+	haplos <- matrix(as.numeric(str_split(haplos, "", simplify = TRUE)), ncol = length(pos))
+	colnames(haplos) <- paste0("pos_", pos)
+	
+	# filter by maf
+	alt <- colSums(haplos) / nrow(haplos) # alternate (non-ancestral) allele freq
+	haplos <- haplos[,alt >=  min_maf & alt <= (1 - min_maf)]
+	
+	# randomly sub-sample
+	if(numLoci >= 1) haplos <- haplos[,sort(sample(1:ncol(haplos), size = numLoci, replace = FALSE))]
+	
+	return(haplos)
+}
