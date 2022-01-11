@@ -37,13 +37,14 @@ echo "begin scrm"
 # 6 random seed (consecutive seeds starting at $6 + 1 are used)
 # These parameters yield about 1 SNP / 50 bp, which is in line with estimates for Pacific oyster (Sauvage et a. 2007)
 # may be a little under for easter oysters, but the easter oyster study was a much smaller dataset
-bash ./sim_oyster_genos_scrm.sh 400 20000 0.00000004 1 /90daydata/oyster_gs_sim//temp"$SLURM_ARRAY_TASK_ID"/ $x
+bash ./sim_oyster_genos_scrm.sh 400 20000 0.00000004 1 /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"/ $x
 # bash ./sim_oyster_genos_scrm.sh 400 20000 0.00000004 1 "$TMPDIR"/temp"$SLURM_ARRAY_TASK_ID"/ $x
 date
 echo "end scrm"
 
 # randomSeed iterationNumber TemporaryLocalStorageDirectory
 Rscript multGen_scrm_HPC.R $x $SLURM_ARRAY_TASK_ID /90daydata/oyster_gs_sim/
+# Rscript multGen_scrm_HPC.R $x $SLURM_ARRAY_TASK_ID $TMPDIR
 
 # remove temp directory
 rm -r /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"
