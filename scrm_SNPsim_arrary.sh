@@ -42,6 +42,6 @@ date
 echo "end scrm"
 
 # randomSeed iterationNumber TemporaryLocalStorageDirectory
-Rscript multGen_macs_HPC_array.R $x $SLURM_ARRAY_TASK_ID $TMPDIR
+Rscript multGen_scrm_HPC.R $x $SLURM_ARRAY_TASK_ID $TMPDIR
 
 echo "Done with simulation"
