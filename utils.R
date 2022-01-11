@@ -317,6 +317,8 @@ runOCS <- function(ocsData, Gmat, N, Ne = 50){
 }
 
 #' read in scrm output to load into AlphaSimR
+#' for use with output that has individuals as rows, SNPs as
+#' columns
 #' reads in one chromosome (one file), filters by maf, and
 #' selects a random subset of loci
 #' maintains phase, assumes diploidy, and scrm (should) only yield biallelic loci
@@ -329,7 +331,7 @@ runOCS <- function(ocsData, Gmat, N, Ne = 50){
 #' @return a matrix with rows as haplotypes (adjacent rows are individuals) and cols as loci
 read_scrm_for_AlphaSimR <- function(path, numLoci, min_maf = 0.05){
 	
-	f <- file(path, "r") # open vcf
+	f <- file(path, "r") # open scrm output
 	on.exit(close(f))
 	# move to end of header
 	line <- readLines(f, n = 1)
@@ -352,4 +354,82 @@ read_scrm_for_AlphaSimR <- function(path, numLoci, min_maf = 0.05){
 	if(numLoci >= 1) haplos <- haplos[,sort(sample(1:ncol(haplos), size = numLoci, replace = FALSE))]
 	
 	return(haplos)
+}
+
+
+#' read in scrm output to load into AlphaSimR
+#' for use with output that has individuals as columns, SNPs as
+#' rows (scrm ... -transpose-segsites)
+#' Tries to limit memory usage
+#' reads in one chromosome (one file), filters by maf, and
+#' selects a random subset of loci
+#' maintains phase, assumes diploidy, and scrm (should) only yield biallelic loci
+#' assumes no missing genotypes (these are being treated as "true" to start a
+#' simulation)
+#' outputs as a matrix with rows haplotypes and columns loci
+#' @param path path to the input file
+#' @param numLoci number of loci to randomly sample (if < 1, no subsampling is performed).
+#'   If no subsampling is required, use non-transposed output and other function for quicker
+#'   processing
+#' @param min_maf minimum maf to keep a locus
+#' @param numLines number of lines to read at one time
+#' @return a matrix with rows as haplotypes (adjacent rows are individuals) and cols as loci
+read_scrm_transpose_for_AlphaSimR <- function(path, numLoci, min_maf = 0.05, numLines = 20000){
+	
+	# read through once to assess maf and determine which SNPs to sample from
+	f <- file(path, "r") # open scrm output
+	# move to end of header
+	line <- readLines(f, n = 1)
+	while(length(line) > 0){
+		if(substr(line, 1, 8) == "position") break
+		line <- readLines(f, n = 1)
+	}
+	posToSample <- c() # all positions with valid maf
+	line <- readLines(f, n = numLines)
+	numC <- length(str_split(line[1], " ")[[1]])
+	lineCounter <- 0
+	while(length(line) > 0){
+		snps <- matrix(as.numeric(str_split(line, " ", simplify = TRUE)), ncol = numC)
+		snps <- snps[,-c(1,2)] # remove position and time column
+		altFreq <- rowSums(snps) / ncol(snps)
+		posToSample <- c(posToSample, lineCounter + which(altFreq >= min_maf & altFreq <= (1 - min_maf)))
+		lineCounter <- lineCounter + length(line)
+		line <- readLines(f, n = numLines) # read next chunk
+	}
+	close(f)
+	
+	# now subsample from SNPs with valid maf
+	if(numLoci >= 1) posToSample <- sort(sample(posToSample, size = numLoci, replace = FALSE))
+	
+	# read through file again and only save SNPs that you want
+	f <- file(path, "r") # open scrm output
+	# move to end of header
+	line <- readLines(f, n = 1)
+	while(length(line) > 0){
+		if(substr(line, 1, 8) == "position") break
+		line <- readLines(f, n = 1)
+	}
+	line <- readLines(f, n = numLines)
+	saveHaplos <- matrix(nrow = 0, ncol = numC - 1)
+	lineCounter <- 0
+	while(length(line) > 0){
+		
+		tempToSample <- posToSample[posToSample <= (lineCounter + length(line))]
+		if(length(tempToSample) > 0){
+			snps <- matrix(as.numeric(str_split(line[tempToSample - lineCounter], " ", simplify = TRUE)), ncol = numC)
+			saveHaplos <- rbind(saveHaplos, snps[,-2]) # remove time column
+			posToSample <- posToSample[-(1:length(tempToSample))] # remove already sampled SNPs
+		}
+		lineCounter <- lineCounter + length(line)
+		line <- readLines(f, n = numLines) # read next chunk
+	}
+	close(f)
+	rm(snps) # save a bit of memory
+	
+	# now transpose, set column names as pos, and remove pos row
+	saveHaplos <- t(saveHaplos)
+	colnames(saveHaplos) <- paste0("pos_", saveHaplos[1,])
+	saveHaplos <- saveHaplos[-1,]
+
+	return(saveHaplos)
 }

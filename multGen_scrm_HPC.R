@@ -44,8 +44,8 @@ print("begin loading scrm genotypes")
 haplo_list <- list()
 genMap <- list()
 for(i in 1:nChr){
-	haplo_list[[i]] <- read_scrm_for_AlphaSimR(paste0(localTempDir, "/", "temp", iterationNumber, "/chr", i, ".txt"),
-													numLoci = qtlPerChr[i] + neutralPerChr[i], min_maf = 0.05)
+	haplo_list[[i]] <- read_scrm_transpose_for_AlphaSimR(paste0(localTempDir, "/", "temp", iterationNumber, "/chr", i, ".txt"),
+													numLoci = qtlPerChr[i] + neutralPerChr[i], min_maf = 0.05, numLines = 20000)
 	genMap[[i]] <- as.numeric(gsub("^pos_", "", colnames(haplo_list[[i]])))
 }
 
@@ -55,6 +55,7 @@ print("end loading")
 if(any(sapply(haplo_list, nrow) != (nFound * 2))) stop("mismatch in number of founders and number of haplotypes from scrm")
 
 founderPop <- newMapPop(genMap=genMap, haplotypes=haplo_list)
+SP <- SimParam$new(founderPop)
 SP$setTrackPed(isTrackPed = TRUE) # have AlphaSimR maintain pedigree records
 SP$addTraitA(nQtlPerChr = qtlPerChr)
 SP$setVarE(h2 = 0.3) # in the range of heritability for growth, meat yield, survival, etc

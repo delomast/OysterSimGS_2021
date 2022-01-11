@@ -24,5 +24,5 @@ for len in "${chrom_lengths[@]}"; do
 	t=$(awk "BEGIN {print 4*$2*$3*$len}")
 	# calculate 4*Ne*r
 	R=$(awk "BEGIN {print 4*$2*$4}")
-	scrm $1 1 -t $t -r $R $len -l 200r -seed $(($6 + $i)) > "$5"chr"$i".txt
+	scrm $1 1 -t $t -r $R $len -l 200r -seed $(($6 + $i)) -transpose-segsites > "$5"chr"$i".txt
 done
