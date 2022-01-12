@@ -45,8 +45,10 @@ haplo_list <- list()
 genMap <- list()
 for(i in 1:nChr){
 	haplo_list[[i]] <- read_scrm_transpose_for_AlphaSimR(paste0(localTempDir, "/", "temp", iterationNumber, "/chr", i, ".txt"),
-													numLoci = qtlPerChr[i] + neutralPerChr[i], min_maf = 0.05, numLines = 20000)
+													numLoci = qtlPerChr[i] + neutralPerChr[i], min_maf = 0.05, numLines = 20000, incr = 1/chrLen[i])
 	genMap[[i]] <- as.numeric(gsub("^pos_", "", colnames(haplo_list[[i]])))
+	# remove simulated haplotypes after loading in
+	file.remove(paste0(localTempDir, "/", "temp", iterationNumber, "/chr", i, ".txt"))
 }
 
 print(Sys.time())
@@ -79,7 +81,6 @@ snpMap <- getSnpMap()
 
 # choose markers
 tempNum <- lapply(numLoci, function(x){
-	# rounding does result in numbers equal to numLoci in this sim
 	dfOut <- data.frame(chr = 1:nChr, num = round(x * (chrLen/ sum(chrLen)))) # proportional to chr length
 	# account for rounding error
 	diff <- x - sum(dfOut$num)
@@ -266,4 +267,6 @@ ncycles, 10
 		pop[[gen + 2]] <- makeCross(pop[[gen + 1]], crossPlan = as.matrix(matingPlan[,1:2]), nProgeny = nOffspringPerCross)
 	}
 }
-save.image(paste0("multGen_macs_", iterationNumber, ".rda"))
+save.image(paste0("multGen_scrm_", iterationNumber, ".rda"))
+# for low memory use
+# save(snpGen, imputeRes, gebvRes, file = paste0("multGen_scrm_small_", iterationNumber, ".rda"))

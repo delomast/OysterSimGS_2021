@@ -366,6 +366,10 @@ read_scrm_for_AlphaSimR <- function(path, numLoci, min_maf = 0.05){
 #' maintains phase, assumes diploidy, and scrm (should) only yield biallelic loci
 #' assumes no missing genotypes (these are being treated as "true" to start a
 #' simulation)
+#' Deals with duplicate positions by making the current position 
+#' equal to the current position + `incr` if the current is less than or equal
+#' to the previous position. Does this AFTER subsampling. recommend use 1 / L where
+#' L is the length of the chromosome (i.e., the increment should correspond to one base pair)
 #' outputs as a matrix with rows haplotypes and columns loci
 #' @param path path to the input file
 #' @param numLoci number of loci to randomly sample (if < 1, no subsampling is performed).
@@ -373,8 +377,9 @@ read_scrm_for_AlphaSimR <- function(path, numLoci, min_maf = 0.05){
 #'   processing
 #' @param min_maf minimum maf to keep a locus
 #' @param numLines number of lines to read at one time
+#' @param incr the increment used to handle duplicate positions
 #' @return a matrix with rows as haplotypes (adjacent rows are individuals) and cols as loci
-read_scrm_transpose_for_AlphaSimR <- function(path, numLoci, min_maf = 0.05, numLines = 20000){
+read_scrm_transpose_for_AlphaSimR <- function(path, numLoci, min_maf = 0.05, numLines = 20000, incr = 1e-7){
 	
 	# read through once to assess maf and determine which SNPs to sample from
 	f <- file(path, "r") # open scrm output
@@ -425,6 +430,16 @@ read_scrm_transpose_for_AlphaSimR <- function(path, numLoci, min_maf = 0.05, num
 	}
 	close(f)
 	rm(snps) # save a bit of memory
+	# find any duplicated positions
+	dups <- which(saveHaplos[2:nrow(saveHaplos),1] <= saveHaplos[1:(nrow(saveHaplos) - 1), 1])
+	while(length(dups) > 0){
+		for(d in dups){
+			saveHaplos[d,1] <- saveHaplos[(d-1),1] + incr
+		}
+		# find any positions that are less than or equal to previous
+		# less than could happen if incr is large enough to boost one position past the following position
+		dups <- which(saveHaplos[2:nrow(saveHaplos),1] <= saveHaplos[1:(nrow(saveHaplos) - 1), 1])
+	}
 	
 	# now transpose, set column names as pos, and remove pos row
 	saveHaplos <- t(saveHaplos)
