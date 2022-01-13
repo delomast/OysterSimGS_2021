@@ -172,7 +172,7 @@ for(gen in 1:nGenerations){
 		g[!rownames(g) %in% highDensInds,!colnames(g) %in% allPanels[[i]]$id] <- 9 # low density offspring
 		
 		# impute
-		imputeDose <- data.frame(id = rownames(ped))
+		imputeDose <- data.frame(id = rownames(trueGenos))
 		# for each chromosome
 		for(j in 1:nChr){
 			tempCols <- colnames(g)[grepl(paste0("^", j, "_"), colnames(g))] # loci in chromosome j
@@ -180,20 +180,23 @@ for(gen in 1:nGenerations){
 									file = paste0(localTempDir, "/", "temp", iterationNumber, "/apGeno.txt"), 
 									sep = " ", quote = FALSE, col.names = FALSE, 
 									row.names = TRUE)
-			# write AlphaPeel spec file (for one chromosome)
-			cat("nsnp, ", length(tempCols), "\n", 
-					"inputfilepath, ", localTempDir, "/","temp", iterationNumber, "/apGeno.txt
-pedigree, ", localTempDir, "/", "temp", iterationNumber, "/ped.txt
-outputfilepath, ", localTempDir, "/", "temp", iterationNumber, "/apOut
-runtype, multi
-ncycles, 10
-", file = paste0(localTempDir, "/", "temp", iterationNumber, "/apSpec.txt"), sep = "")
+
 			
 			# run AlphaPeel
-			system2("AlphaPeel/AlphaPeel_linux", args = paste0(localTempDir, "/", "temp", iterationNumber, "/apSpec.txt"))
+			# 1 output file prefix
+			# 2 genotype input
+			# 3 pedigree input
+			# 4 random seed
+			# 5 max thread for imputation
+			system2("bash", args = c("runAlphaImpute2.sh",
+															 paste0(localTempDir, "/", "temp", iterationNumber, "/imputeOut"),
+															 paste0(localTempDir, "/", "temp", iterationNumber, "/apGeno.txt"),
+							paste0(localTempDir, "/", "temp", iterationNumber, "/ped.txt"),
+							"7",
+							"2")) # using two threads b/c ceres has hyperthreading on all cores
 			
 			# load results
-			tempImputeDose <- read.table(paste0(localTempDir, "/", "temp", iterationNumber, "/apOut.dosages"))
+			tempImputeDose <- read.table(paste0(localTempDir, "/", "temp", iterationNumber, "/imputeOut.genotypes"))
 			colnames(tempImputeDose) <- c("id", tempCols)
 			imputeDose <- imputeDose %>% 
 				left_join(tempImputeDose %>% mutate(id = as.character(id)), by = "id")
