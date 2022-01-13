@@ -43,10 +43,11 @@ date
 echo "end scrm"
 
 # randomSeed iterationNumber TemporaryLocalStorageDirectory
-Rscript multGen_scrm_HPC.R $x $SLURM_ARRAY_TASK_ID /90daydata/oyster_gs_sim/
+Rscript multGen_scrm_ai2_HPC.R $x $SLURM_ARRAY_TASK_ID /90daydata/oyster_gs_sim/
 # Rscript multGen_scrm_HPC.R $x $SLURM_ARRAY_TASK_ID $TMPDIR
 
 # remove temp directory
+cp rm -r /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"/*.genotypes /90daydata/oyster_gs_sim/
 rm -r /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"
 
 echo "Done with simulation"
