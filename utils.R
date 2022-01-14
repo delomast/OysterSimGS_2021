@@ -3,6 +3,7 @@
 library(dplyr)
 library(stringr)
 library(optiSel)
+library(AllocateMate)
 
 #' create G matrix with specified base pop frequencies
 #' first method of VanRaden (2008), also Endelman and Jannink (2012)
@@ -310,9 +311,18 @@ runOCS <- function(ocsData, Gmat, N, Ne = 50){
 												 trace=FALSE)
 	# calculate number of matings per individual from contribution proportions
 	ocsMatings <- calcNumMatings(ocsParent = ocsContrib$parent, N = N)
+	
 	# assign crosses (limit each pair to one cross)
 	# to minimize inbreeding of each family
-	crosses <- matings(ocsMatings, Kin=Gmat, ub.n = 1)
+	# This branch and bound algorithm failed frequently with ub.n=1
+	# crosses <- matings(ocsMatings, Kin=Gmat, ub.n = 1)
+	ocsMatings <- ocsMatings %>% mutate(ID=as.character(Indiv), 
+																			 SEX=ifelse(Sex == "male", "M", "F"), 
+																			 EBV=gebv, N_AS_PARENT=n) %>% 
+		select(ID, SEX, EBV, N_AS_PARENT) %>% filter(N_AS_PARENT > 0)
+	crosses <- allocate.mate.H(H = Gmat[ocsMatings2$ID, ocsMatings2$ID]*2, 
+															parents = ocsMatings2, max_F = 1, method = "min_F")
+	
 	return(crosses)
 }
 

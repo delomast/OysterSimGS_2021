@@ -12,6 +12,7 @@ library(AlphaSimR, lib.loc="/project/oyster_gs_sim/R_packages/4.1/")
 library(tidyverse, lib.loc="/project/oyster_gs_sim/R_packages/4.1/")
 library(rrBLUP, lib.loc="/project/oyster_gs_sim/R_packages/4.1/")
 library(optiSel, lib.loc="/project/oyster_gs_sim/R_packages/4.1/")
+library(AllocateMate, lib.loc="/project/oyster_gs_sim/R_packages/4.1/")
 
 source("utils.R")
 
