@@ -323,7 +323,7 @@ runOCS <- function(ocsData, Gmat, N, Ne = 50){
 	crosses <- allocate.mate.H(H = Gmat[ocsMatings$ID, ocsMatings$ID]*2, 
 															parents = ocsMatings, max_F = 1, method = "min_F")
 	
-	return(crosses)
+	return(crosses$optimal_families)
 }
 
 #' read in scrm output to load into AlphaSimR
