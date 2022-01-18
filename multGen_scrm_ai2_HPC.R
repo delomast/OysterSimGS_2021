@@ -76,7 +76,7 @@ print("begin panel design")
 # SNP panel "design"
 
 # number of loci in each panel to compare
-numLoci <- sort(unique(c(seq(100, 500, 100), 750, 1000, 2000, 5000, 10000, 15000, 25000, 50000)))
+numLoci <- c(100, 250, 500, 750, 1000, 2000, 5000, 10000, 25000, 50000)
 
 snpMap <- getSnpMap()
 

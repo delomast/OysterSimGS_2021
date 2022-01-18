@@ -320,8 +320,8 @@ runOCS <- function(ocsData, Gmat, N, Ne = 50){
 																			 SEX=ifelse(Sex == "male", "M", "F"), 
 																			 EBV=gebv, N_AS_PARENT=n) %>% 
 		select(ID, SEX, EBV, N_AS_PARENT) %>% filter(N_AS_PARENT > 0)
-	crosses <- allocate.mate.H(H = Gmat[ocsMatings2$ID, ocsMatings2$ID]*2, 
-															parents = ocsMatings2, max_F = 1, method = "min_F")
+	crosses <- allocate.mate.H(H = Gmat[ocsMatings$ID, ocsMatings$ID]*2, 
+															parents = ocsMatings, max_F = 1, method = "min_F")
 	
 	return(crosses)
 }
