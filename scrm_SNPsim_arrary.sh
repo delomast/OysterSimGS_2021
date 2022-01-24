@@ -8,6 +8,7 @@
 #SBATCH --array=1-2%2 #specify how many jobs in the array and limit number running concurrently (e.g. 1-96%40)
 #SBATCH --output=arrayScrm_%a.out # tell it where to store the output console text
 
+echo "My SLURM_JOB_ID: " $SLURM_JOB_ID
 echo "My SLURM_ARRAY_TASK_ID: " $SLURM_ARRAY_TASK_ID
 
 module load r/4.1.2
