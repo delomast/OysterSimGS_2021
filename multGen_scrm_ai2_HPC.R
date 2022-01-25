@@ -362,7 +362,7 @@ for(gen in 1:nGenerations){
 		# OCS with lagrangian
 		selCands <- comp %>% filter(is.na(pheno)) %>% pull(id)
 		ocsData <- data.frame(Indiv = pop[[gen + 1]]@id, Sex = if_else(pop[[gen + 1]]@sex == "M", "male", "female")) %>%
-			left_join(data.frame(Indiv = names(gebv$g), gebv = gebv$g), by = "Indiv") %>%
+			left_join(data.frame(Indiv = as.character(sol$levelNew), gebv = sol$V4), by = "Indiv") %>%
 			filter(Indiv %in% selCands)
 		matingPlan <- runOCS(ocsData = ocsData, Gmat = Amat[ocsData$Indiv,ocsData$Indiv], 
 												 N = nFound / 2, Ne = 50)
