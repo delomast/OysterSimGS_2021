@@ -185,8 +185,13 @@ for(gen in 1:nGenerations){
 			write.table(paste0(localTempDir, "/", "temp", iterationNumber, "/", "f90dat.txt"), 
 									sep = " ", col.names = FALSE, row.names = FALSE, quote = FALSE)
 		# genotypes
+		# only include individuals that are either phenotyped, were selected, or are selection candidates
+		allParents<- unique(c(SP$pedigree[,"father"], SP$pedigree[,"mother"]))
+		allParents <- allParents[allParents != 0] # remove founder placeholder
 		rownames(g) <- paste0(pad_id(rownames(g)), " ")
-		write.table(g, paste0(localTempDir, "/", "temp", iterationNumber, "/", "f90snp.txt"), 
+			# phenotyped, were selected, selection candidates
+		write.table(g[rownames(g) %in% unique(c(p$id[!is.na(p$pheno)], allParents, pop[[gen + 1]]@id)),], 
+								paste0(localTempDir, "/", "temp", iterationNumber, "/", "f90snp.txt"), 
 								sep = "", col.names = FALSE, row.names = TRUE, quote = FALSE)
 		rownames(g) <- gsub(" ", "", rownames(g)) # undo padding for blupf90 input
 		# estimate gebvs with airemlf90
@@ -326,8 +331,13 @@ for(gen in 1:nGenerations){
 			write.table(paste0(localTempDir, "/", "temp", iterationNumber, "/", "f90dat.txt"), 
 									sep = " ", col.names = FALSE, row.names = FALSE, quote = FALSE)
 		# genotypes
+		# only include individuals that are either phenotyped, were selected, or are selection candidates
+		allParents<- unique(c(SP$pedigree[,"father"], SP$pedigree[,"mother"]))
+		allParents <- allParents[allParents != 0] # remove founder placeholder
 		rownames(g) <- paste0(pad_id(rownames(g)), " ")
-		write.table(g, paste0(localTempDir, "/", "temp", iterationNumber, "/", "f90snp.txt"), 
+		# phenotyped, were selected, selection candidates
+		write.table(g[rownames(g) %in% unique(c(p$id[!is.na(p$pheno)], allParents, pop[[gen + 1]]@id)),], 
+								paste0(localTempDir, "/", "temp", iterationNumber, "/", "f90snp.txt"), 
 								sep = "", col.names = FALSE, row.names = TRUE, quote = FALSE)
 		rownames(g) <- gsub(" ", "", rownames(g)) # undo padding for blupf90 input
 		# estimate gebvs with airemlf90
