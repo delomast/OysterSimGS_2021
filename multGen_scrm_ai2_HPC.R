@@ -109,6 +109,45 @@ baseAlleleFreqs <- lapply(allPanels, function(x){
 	return(colSums(tempgenos) / (2*nrow(tempgenos)))
 })
 
+# write out parameter file for renumf90
+cat("DATAFILE
+", paste0(localTempDir, "/", "temp", iterationNumber, "/"), "f90dat.txt
+TRAITS
+3
+FIELDS_PASSED TO OUTPUT
+
+WEIGHT(S)
+
+RESIDUAL_VARIANCE
+2.0
+EFFECT          # first fixed effect, overall mean
+2 cross numer
+EFFECT           # first random effect (animal)
+1 cross alpha
+RANDOM           ## additive effect without pedigree
+animal
+SNP_FILE         ## SNP marker file
+", paste0(localTempDir, "/", "temp", iterationNumber, "/"), "f90snp.txt
+(CO)VARIANCES    ## its variance component
+1.0
+OPTION use_yams
+OPTION AlphaBeta 0.99 0.01
+OPTION tunedG 0
+OPTION whichG 1 # vanRaden 2008
+OPTION whichfreq 0 # use freqs from file
+OPTION FreqFile ", paste0(localTempDir, "/", "temp", iterationNumber, "/"), "baseFreqs.txt # file with frequencies (in same order as genotypes)
+OPTION whichfreqScale 0 # use freqs from file
+OPTION minfreq 0.0 # turning off all filters and checks
+OPTION monomorphic 0
+OPTION verify_parentage 0
+OPTION no_quality_control
+OPTION num_threads_pregs 2 # number of threads
+OPTION threshold_duplicate_samples 100 # effectively ignore
+OPTION high_threshold_diagonal_g 2 # effectively ignore
+OPTION low_threshold_diagonal_g 0.5 # effectively ignore
+", file=paste0(localTempDir, "/", "temp", iterationNumber, "/", "renum.txt"), sep = "")
+
+
 # initial spawning
 pop[[2]] <- randCross(pop[[1]], nCrosses = nFound/2, nProgeny = nOffspringPerCross, balance = TRUE)
 
@@ -130,14 +169,38 @@ for(gen in 1:nGenerations){
 		for(j in 2:length(pop)) g <- rbind(g, pullSnpGeno(pop[[j]])[,allPanels[[i]]$id])
 		
 		# calc GEBVs - no imputation
-		Amat <- createG(g = g, af = baseAlleleFreqs[[i]]) # G with first method of VanRaden (2008), also Endelman and Jannink (2012)
-		p <- data.frame(id = rownames(Amat)) %>% 
+		# write out input for blupf90
+		# write out base pop freqs for blupf90 - each time b/c different for each panel
+		write.table(cbind(1:length(baseAlleleFreqs[[i]]), baseAlleleFreqs[[i]]),
+								paste0(localTempDir, "/", "temp", iterationNumber, "/", "baseFreqs.txt"),
+								sep = " ", col.names = FALSE, row.names = FALSE, quote = FALSE)
+		
+		p <- data.frame(id = rownames(g)) %>% 
 			left_join(trainPhenos %>% select(id, Trait_1) %>% rename(pheno = Trait_1), by = "id") # hard coded for first trait
-		# predict genomic breeding values
-		gebv <- kin.blup(data = p, geno = "id", pheno = "pheno", K = Amat)
+		
+		# phenotypes
+		# coding so that all phenotypes are above 100, missing is 0, and including an overall mean
+		p %>% mutate(pheno = pheno + abs(min(min(pheno, na.rm = TRUE), 0)) + 100, mu = 1) %>%
+			filter(!is.na(pheno)) %>% select(id, mu, pheno) %>%
+			write.table(paste0(localTempDir, "/", "temp", iterationNumber, "/", "f90dat.txt"), 
+									sep = " ", col.names = FALSE, row.names = FALSE, quote = FALSE)
+		# genotypes
+		rownames(g) <- paste0(pad_id(rownames(g)), " ")
+		write.table(g, paste0(localTempDir, "/", "temp", iterationNumber, "/", "f90snp.txt"), 
+								sep = "", col.names = FALSE, row.names = TRUE, quote = FALSE)
+		rownames(g) <- gsub(" ", "", rownames(g)) # undo padding for blupf90 input
+		# estimate gebvs with airemlf90
+		system2(command = "bash", args = c("run_blupf90.sh", paste0(localTempDir, "/", "temp", iterationNumber, "/")))
+		
+		# load in solutions
+		sol <- read.table(paste0(localTempDir, "/", "temp", iterationNumber, "/solutions"), row.names = NULL, skip = 1) %>%
+			filter(V2 == 2) # get only animal effect
+		xref <- read.table(paste0(localTempDir, "/", "temp", iterationNumber, "/f90snp.txt_XrefID"), row.names = NULL)
+		sol$levelNew <- xref$V2[match(sol$V3, xref$V1)] # append original name to solutions
+		
 		# NOTE: only using _current_ generation to calculate accuracy of gebvs
 		comp <- data.frame(id = pop[[gen + 1]]@id, gv = gv(pop[[gen + 1]])) %>% 
-			left_join(data.frame(id = names(gebv$g), gebv = gebv$g), by = "id") %>%
+			left_join(data.frame(id = as.character(sol$levelNew), gebv = sol$V4), by = "id") %>%
 			left_join(p, by = "id")
 		# calc accuracy of prediction and save
 		gebvRes <- gebvRes %>% rbind(data.frame(genNum = gen,
@@ -147,7 +210,15 @@ for(gen in 1:nGenerations){
 																						acc = cor(comp$gv[is.na(comp$pheno)], comp$gebv[is.na(comp$pheno)])))
 		
 		# impute
-		if (i == length(allPanels)) next # no need to impute if all loci are genotyped
+		if (i == length(allPanels)){
+			# create G for OCS routine
+			Amat <- createG(g = g, af = baseAlleleFreqs[[length(allPanels)]]) # G with first method of VanRaden (2008)
+			next # no need to impute if all loci are genotyped
+		} 
+		
+		
+		# Left off here, need to go through carefully
+		
 		
 		# AlphaPeel
 		print(Sys.time())
@@ -155,6 +226,8 @@ for(gen in 1:nGenerations){
 		# make inputs
 		ped <- SP$pedigree[,1:2] # full pedigree
 		# only get inds starting with founder pop
+		# this chunk written to also work for cases where some "pre-simulation" breeding was
+		# performed - usually to generate LD between chromosomes
 		allInds <- c()
 		for(j in 1:length(pop)) allInds <- c(allInds, pop[[j]]@id)
 		ped <- ped[allInds,]
@@ -173,7 +246,7 @@ for(gen in 1:nGenerations){
 		g[!rownames(g) %in% highDensInds,!colnames(g) %in% allPanels[[i]]$id] <- 9 # low density offspring
 		
 		# impute
-		imputeDose <- data.frame(id = rownames(trueGenos))
+		imputeDose <- data.frame(id = rownames(g))
 		# for each chromosome
 		for(j in 1:nChr){
 			tempCols <- colnames(g)[grepl(paste0("^", j, "_"), colnames(g))] # loci in chromosome j
@@ -183,7 +256,7 @@ for(gen in 1:nGenerations){
 									row.names = TRUE)
 
 			
-			# run AlphaPeel
+			# run AlphaImpute2
 			# 1 output file prefix
 			# 2 genotype input
 			# 3 pedigree input
@@ -234,19 +307,46 @@ for(gen in 1:nGenerations){
 		rm(trueGenos)
 		
 		# calculate GEBVs
-		# note that we are overwriting earlier variables used to calcualte GEBVs
-		g <- imputeDose # imputed values for ALL loci (even genotyped)
-		rownames(g) <- g$id
-		g <- as.matrix(g[,-1])
-		Amat <- createG(g = g, af = baseAlleleFreqs[[length(allPanels)]]) # G with first method of VanRaden (2008)
-		p <- data.frame(id = rownames(Amat)) %>% 
-			left_join(trainPhenos %>% select(id, Trait_1) %>% rename(pheno = Trait_1), by = "id") # hard coded for first trait
-		# predict genomic breeding values
-		gebv <- kin.blup(data = p, geno = "id", pheno = "pheno", K = Amat)
-		comp <- data.frame(id = pop[[gen + 1]]@id, gv = gv(pop[[gen + 1]])) %>% 
-			left_join(data.frame(id = names(gebv$g), gebv = gebv$g), by = "id") %>%
-			left_join(p, by = "id")
+		# note that we are overwriting earlier variables used to calculate GEBVs
+		# write out allele freqs
+		write.table(cbind(1:length(baseAlleleFreqs[[length(allPanels)]]), baseAlleleFreqs[[length(allPanels)]]),
+								paste0(localTempDir, "/", "temp", iterationNumber, "/", "baseFreqs.txt"),
+								sep = " ", col.names = FALSE, row.names = FALSE, quote = FALSE)
 		
+		rownames(imputeDose) <- imputeDose$id
+		imputeDose <- as.matrix(imputeDose[,-1])
+		imputeDose <- imputeDose[rownames(g), colnames(g)] # make order the same as all other inputs
+		g <- imputeDose # imputed values for ALL loci (even genotyped)
+		rm(imputeDose)
+		
+		
+		p <- data.frame(id = rownames(g)) %>% 
+			left_join(trainPhenos %>% select(id, Trait_1) %>% rename(pheno = Trait_1), by = "id") # hard coded for first trait
+		
+		# phenotypes
+		# coding so that all phenotypes are above 100, missing is 0, and including an overall mean
+		p %>% mutate(pheno = pheno + abs(min(min(pheno, na.rm = TRUE), 0)) + 100, mu = 1) %>%
+			filter(!is.na(pheno)) %>% select(id, mu, pheno) %>%
+			write.table(paste0(localTempDir, "/", "temp", iterationNumber, "/", "f90dat.txt"), 
+									sep = " ", col.names = FALSE, row.names = FALSE, quote = FALSE)
+		# genotypes
+		rownames(g) <- paste0(pad_id(rownames(g)), " ")
+		write.table(g, paste0(localTempDir, "/", "temp", iterationNumber, "/", "f90snp.txt"), 
+								sep = "", col.names = FALSE, row.names = TRUE, quote = FALSE)
+		rownames(g) <- gsub(" ", "", rownames(g)) # undo padding for blupf90 input
+		# estimate gebvs with airemlf90
+		system2(command = "bash", args = c("run_blupf90.sh", paste0(localTempDir, "/", "temp", iterationNumber, "/")))
+		
+		# load in solutions
+		sol <- read.table(paste0(localTempDir, "/", "temp", iterationNumber, "/solutions"), row.names = NULL, skip = 1) %>%
+			filter(V2 == 2) # get only animal effect
+		xref <- read.table(paste0(localTempDir, "/", "temp", iterationNumber, "/f90snp.txt_XrefID"), row.names = NULL)
+		sol$levelNew <- xref$V2[match(sol$V3, xref$V1)] # append original name to solutions
+		
+		# NOTE: only using _current_ generation to calculate accuracy of gebvs
+		comp <- data.frame(id = pop[[gen + 1]]@id, gv = gv(pop[[gen + 1]])) %>% 
+			left_join(data.frame(id = as.character(sol$levelNew), gebv = sol$V4), by = "id") %>%
+			left_join(p, by = "id")
 		# calc accuracy of prediction and save
 		gebvRes <- gebvRes %>% rbind(data.frame(genNum = gen,
 																						panelNum = i, 
@@ -266,6 +366,7 @@ for(gen in 1:nGenerations){
 			filter(Indiv %in% selCands)
 		matingPlan <- runOCS(ocsData = ocsData, Gmat = Amat[ocsData$Indiv,ocsData$Indiv], 
 												 N = nFound / 2, Ne = 50)
+		rm(Amat) # save memory
 		print(Sys.time())
 		print("end ocs")
 		# create next generation

@@ -22,6 +22,25 @@ createG <- function(g, af){
 	)
 }
 
+#' adds spaces to teh end of strings to make
+#' all strings in the vector the same length (number of characters)
+#' Useful for creating fixed width files, such as for input of genotypes to
+#' blupf90
+#' @param x the character vector
+#' @param pad the character to use to pad the strings
+pad_id <- function(x, pad = " "){
+	if(nchar(pad) != 1) stop("pad must be only one character in length")
+	nc <- nchar(x)
+	m <- max(nc)
+	toAdd <- m - nc
+	uToAdd <- unique(toAdd[toAdd > 0])
+	if(length(uToAdd) < 1) return(as.character(x))
+	for(u in uToAdd){
+		temp <- paste(rep(pad, u), collapse = "")
+		x[toAdd == u] <- paste0(x[toAdd == u], temp)
+	}
+	return(x)
+}
 
 #' function to apply full-sib family testing with an AlphaSimR object
 #' pulls ID's and phenotypes for specified proportion (rounded) of individuals from each
