@@ -210,11 +210,7 @@ for(gen in 1:nGenerations){
 																						acc = cor(comp$gv[is.na(comp$pheno)], comp$gebv[is.na(comp$pheno)])))
 		
 		# impute
-		if (i == length(allPanels)){
-			# create G for OCS routine
-			Amat <- createG(g = g, af = baseAlleleFreqs[[length(allPanels)]]) # G with first method of VanRaden (2008)
-			next # no need to impute if all loci are genotyped
-		} 
+		if (i == length(allPanels)) next # no need to impute if all loci are genotyped
 		
 		
 		# Left off here, need to go through carefully
@@ -364,6 +360,9 @@ for(gen in 1:nGenerations){
 		ocsData <- data.frame(Indiv = pop[[gen + 1]]@id, Sex = if_else(pop[[gen + 1]]@sex == "M", "male", "female")) %>%
 			left_join(data.frame(Indiv = as.character(sol$levelNew), gebv = sol$V4), by = "Indiv") %>%
 			filter(Indiv %in% selCands)
+		# create G for OCS routine
+		Amat <- createG(g = g[ocsData$Indiv,ocsData$Indiv], 
+										af = baseAlleleFreqs[[length(allPanels)]]) # G with first method of VanRaden (2008)
 		matingPlan <- runOCS(ocsData = ocsData, Gmat = Amat[ocsData$Indiv,ocsData$Indiv], 
 												 N = nFound / 2, Ne = 50)
 		rm(Amat) # save memory
