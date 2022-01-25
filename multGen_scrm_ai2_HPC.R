@@ -371,7 +371,7 @@ for(gen in 1:nGenerations){
 			left_join(data.frame(Indiv = as.character(sol$levelNew), gebv = sol$V4), by = "Indiv") %>%
 			filter(Indiv %in% selCands)
 		# create G for OCS routine
-		Amat <- createG(g = g[ocsData$Indiv,ocsData$Indiv], 
+		Amat <- createG(g = g[ocsData$Indiv,],
 										af = baseAlleleFreqs[[length(allPanels)]]) # G with first method of VanRaden (2008)
 		matingPlan <- runOCS(ocsData = ocsData, Gmat = Amat[ocsData$Indiv,ocsData$Indiv], 
 												 N = nFound / 2, Ne = 50)
