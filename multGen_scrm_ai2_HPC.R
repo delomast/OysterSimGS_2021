@@ -383,7 +383,9 @@ for(gen in 1:nGenerations){
 		print(Sys.time())
 		print("end ocs")
 		# create next generation
-		pop[[gen + 2]] <- makeCross(pop[[gen + 1]], crossPlan = as.matrix(matingPlan[,1:2]), nProgeny = nOffspringPerCross)
+		pop[[gen + 2]] <- makeCross(pop[[gen + 1]], 
+																crossPlan = as.matrix(matingPlan[,2:1]), # female in first col, male in second
+																nProgeny = nOffspringPerCross)
 	}
 }
 save.image(paste0("multGen_scrm_", iterationNumber, ".rda"))
