@@ -188,12 +188,14 @@ for(gen in 1:nGenerations){
 		# only include individuals that are either phenotyped, were selected, or are selection candidates
 		allParents<- unique(c(SP$pedigree[,"father"], SP$pedigree[,"mother"]))
 		allParents <- allParents[allParents != 0] # remove founder placeholder
+		# phenotyped, were selected, selection candidates
+		tempBool <- rownames(g) %in% unique(c(p$id[!is.na(p$pheno)], allParents, pop[[gen + 1]]@id)) 
 		rownames(g) <- paste0(pad_id(rownames(g)), " ")
-			# phenotyped, were selected, selection candidates
-		write.table(g[rownames(g) %in% unique(c(p$id[!is.na(p$pheno)], allParents, pop[[gen + 1]]@id)),], 
+		write.table(g[tempBool,], 
 								paste0(localTempDir, "/", "temp", iterationNumber, "/", "f90snp.txt"), 
 								sep = "", col.names = FALSE, row.names = TRUE, quote = FALSE)
 		rownames(g) <- gsub(" ", "", rownames(g)) # undo padding for blupf90 input
+		rm(tempBool)
 		# estimate gebvs with airemlf90
 		system2(command = "bash", args = c("run_blupf90.sh", paste0(localTempDir, "/", "temp", iterationNumber, "/")))
 		
@@ -334,12 +336,14 @@ for(gen in 1:nGenerations){
 		# only include individuals that are either phenotyped, were selected, or are selection candidates
 		allParents<- unique(c(SP$pedigree[,"father"], SP$pedigree[,"mother"]))
 		allParents <- allParents[allParents != 0] # remove founder placeholder
-		rownames(g) <- paste0(pad_id(rownames(g)), " ")
 		# phenotyped, were selected, selection candidates
-		write.table(g[rownames(g) %in% unique(c(p$id[!is.na(p$pheno)], allParents, pop[[gen + 1]]@id)),], 
+		tempBool <- rownames(g) %in% unique(c(p$id[!is.na(p$pheno)], allParents, pop[[gen + 1]]@id))
+		rownames(g) <- paste0(pad_id(rownames(g)), " ")
+		write.table(g[tempBool,],
 								paste0(localTempDir, "/", "temp", iterationNumber, "/", "f90snp.txt"), 
 								sep = "", col.names = FALSE, row.names = TRUE, quote = FALSE)
 		rownames(g) <- gsub(" ", "", rownames(g)) # undo padding for blupf90 input
+		rm(tempBool)
 		# estimate gebvs with airemlf90
 		system2(command = "bash", args = c("run_blupf90.sh", paste0(localTempDir, "/", "temp", iterationNumber, "/")))
 		
