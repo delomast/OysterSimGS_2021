@@ -3,9 +3,9 @@
 # performance of different SNP panel sizes
 # written for execution on Ceres
 #SBATCH --cpus-per-task=1  # ask for 1 cpu
-#SBATCH --mem=40G # Maximum amount of memory this job will be given
+#SBATCH --mem=45G # Maximum amount of memory this job will be given
 #SBATCH --time=47:00:00 # ask that the job be allowed to run for 
-#SBATCH --array=1-2%2 #specify how many jobs in the array and limit number running concurrently (e.g. 1-96%40)
+#SBATCH --array=1-200%75 #specify how many jobs in the array and limit number running concurrently (e.g. 1-96%40)
 #SBATCH --output=arrayScrm_%a.out # tell it where to store the output console text
 
 echo "My SLURM_JOB_ID: " $SLURM_JOB_ID
@@ -39,16 +39,13 @@ echo "begin scrm"
 # These parameters yield about 1 SNP / 50 bp, which is in line with estimates for Pacific oyster (Sauvage et a. 2007)
 # may be a little under for easter oysters, but the easter oyster study was a much smaller dataset
 bash ./sim_oyster_genos_scrm.sh 400 20000 0.00000004 1 /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"/ $x
-# bash ./sim_oyster_genos_scrm.sh 400 20000 0.00000004 1 "$TMPDIR"/temp"$SLURM_ARRAY_TASK_ID"/ $x
 date
 echo "end scrm"
 
 # randomSeed iterationNumber TemporaryLocalStorageDirectory
 Rscript multGen_scrm_ai2_HPC.R $x $SLURM_ARRAY_TASK_ID /90daydata/oyster_gs_sim/
-# Rscript multGen_scrm_HPC.R $x $SLURM_ARRAY_TASK_ID $TMPDIR
 
 # remove temp directory
-# cp /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"/*.genotypes /90daydata/oyster_gs_sim/
 rm -r /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"
 
 echo "Done with simulation"
