@@ -388,6 +388,7 @@ for(gen in 1:nGenerations){
 																nProgeny = nOffspringPerCross)
 	}
 }
-save.image(paste0("multGen_scrm_", iterationNumber, ".rda"))
+# initial testing, save everything
+# save.image(paste0("multGen_scrm_", iterationNumber, ".rda"))
 # for low memory use
-# save(snpGen, imputeRes, gebvRes, file = paste0("multGen_scrm_small_", iterationNumber, ".rda"))
+save(snpGen, imputeRes, gebvRes, file = paste0("rda/multGen_scrm_small_", iterationNumber, ".rda"))
