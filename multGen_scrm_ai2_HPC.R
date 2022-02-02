@@ -147,6 +147,18 @@ OPTION high_threshold_diagonal_g 2 # effectively ignore
 OPTION low_threshold_diagonal_g 0.5 # effectively ignore
 ", file=paste0(localTempDir, "/", "temp", iterationNumber, "/", "renum.txt"), sep = "")
 
+# record initial marker variation by panel
+He_res <- data.frame()
+for(i in length(allPanels)){
+	curGen_maf <- sapply(baseAlleleFreqs[[i]], function(x) {return(min(x, 1 - x))})
+	curGen_He <- 1 - curGen_maf^2 - (1-curGen_maf)^2
+	# save means
+	He_res <- He_res %>% rbind(data.frame(genNum = 0,
+																				panelNum = i,
+																				numLoci = nrow(allPanels[[i]]),
+																				He = mean(curGen_He),
+																				meanMaf = mean(curGen_maf)))
+}
 
 # initial spawning
 pop[[2]] <- randCross(pop[[1]], nCrosses = nFound/2, nProgeny = nOffspringPerCross, balance = TRUE)
@@ -215,7 +227,16 @@ for(gen in 1:nGenerations){
 																						impute = FALSE, 
 																						numLoci = nrow(allPanels[[i]]), 
 																						acc = cor(comp$gv[is.na(comp$pheno)], comp$gebv[is.na(comp$pheno)])))
-		
+		# calculate maf and He with the panel for the current generation
+		curGen_maf <- sapply(colSums(g[pop[[gen + 1]]@id,]) / (2*length(pop[[gen + 1]]@id)),
+												 function(x){return(min(x, 1 - x))})
+		curGen_He <- 1 - curGen_maf^2 - (1-curGen_maf)^2
+		# save means
+		He_res <- He_res %>% rbind(data.frame(genNum = gen,
+																					panelNum = i,
+																					numLoci = nrow(allPanels[[i]]),
+																					He = mean(curGen_He),
+																					meanMaf = mean(curGen_maf)))
 		# impute
 		if (i == length(allPanels)) next # no need to impute if all loci are genotyped
 		
@@ -391,4 +412,4 @@ for(gen in 1:nGenerations){
 # initial testing, save everything
 # save.image(paste0("multGen_scrm_", iterationNumber, ".rda"))
 # for low memory use
-save(snpGen, imputeRes, gebvRes, file = paste0("rda/multGen_scrm_small_", iterationNumber, ".rda"))
+save(snpGen, imputeRes, gebvRes, He_res, file = paste0("rda/multGen_scrm_small_", iterationNumber, ".rda"))
