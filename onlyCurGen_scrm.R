@@ -1,3 +1,10 @@
+# This ONLY uses the current generation adn small panels
+# w/o imputation to calculate gebvs. THis is to test
+# if decreasing gebv accuracy is still observed over time.
+# HOWEVER, selection decisions are still made by modelling the ENTIRE
+# population (all generations) so that simulations are directly
+# comparable
+# 
 # This script looks at accuracy of and with imputation
 #   over several generations
 #   and uses scrm to simulate the genome
@@ -174,12 +181,13 @@ for(gen in 1:nGenerations){
 	trainPhenos <- rbind(trainPhenos, sibTestEqual(fam = pop[[gen + 1]], propTest = 0.6)) # phenotype 30, select from 20
 	
 	for(i in 1:length(allPanels)){
+		# calculating gebvs and accuracy with only the current generation in
+		# the model
 		print(Sys.time())
 		print(paste("begin panel: ", i))
 		# get all genotypes at smaller panel
-		g <- pullSnpGeno(pop[[1]])[,allPanels[[i]]$id]
-		for(j in 2:length(pop)) g <- rbind(g, pullSnpGeno(pop[[j]])[,allPanels[[i]]$id])
-		
+		g <- pullSnpGeno(pop[[gen + 1]])[,allPanels[[i]]$id]
+
 		# calc GEBVs - no imputation
 		# write out input for blupf90
 		# write out base pop freqs for blupf90 - each time b/c different for each panel
@@ -197,17 +205,11 @@ for(gen in 1:nGenerations){
 			write.table(paste0(localTempDir, "/", "temp", iterationNumber, "/", "f90dat.txt"), 
 									sep = " ", col.names = FALSE, row.names = FALSE, quote = FALSE)
 		# genotypes
-		# only include individuals that are either phenotyped, were selected, or are selection candidates
-		allParents<- unique(c(SP$pedigree[,"father"], SP$pedigree[,"mother"]))
-		allParents <- allParents[allParents != 0] # remove founder placeholder
-		# phenotyped, were selected, selection candidates
-		tempBool <- rownames(g) %in% unique(c(p$id[!is.na(p$pheno)], allParents, pop[[gen + 1]]@id)) 
 		rownames(g) <- paste0(pad_id(rownames(g)), " ")
-		write.table(g[tempBool,], 
+		write.table(g, 
 								paste0(localTempDir, "/", "temp", iterationNumber, "/", "f90snp.txt"), 
 								sep = "", col.names = FALSE, row.names = TRUE, quote = FALSE)
 		rownames(g) <- gsub(" ", "", rownames(g)) # undo padding for blupf90 input
-		rm(tempBool)
 		# estimate gebvs with airemlf90
 		system2(command = "bash", args = c("run_blupf90.sh", paste0(localTempDir, "/", "temp", iterationNumber, "/")))
 		
@@ -237,149 +239,75 @@ for(gen in 1:nGenerations){
 																					numLoci = nrow(allPanels[[i]]),
 																					He = mean(curGen_He),
 																					meanMaf = mean(curGen_maf)))
-		# impute
-		if (i == length(allPanels)) next # no need to impute if all loci are genotyped
-		
-		# Imputing
-		print(Sys.time())
-		print("begin impute")
-		# make inputs
-		ped <- SP$pedigree[,1:2] # full pedigree
-		# only get inds starting with founder pop
-		# this chunk written to also work for cases where some "pre-simulation" breeding was
-		# performed - usually to generate LD between chromosomes
-		allInds <- c()
-		for(j in 1:length(pop)) allInds <- c(allInds, pop[[j]]@id)
-		ped <- ped[allInds,]
-		# pretend you don't know parents of founders
-		ped[pop[[1]]@id,1:2] <- 0
-		write.table(ped, file = paste0(localTempDir, "/", "temp", iterationNumber, "/ped.txt"),
-								sep = " ", quote = FALSE, col.names = FALSE, row.names = TRUE)
-		
-		# get all genotypes for maximum size panel - assumed at the end of allPanels
-		g <- pullSnpGeno(pop[[1]])[,allPanels[[length(allPanels)]]$id]
-		for(j in 2:length(pop)) g <- rbind(g, pullSnpGeno(pop[[j]])[,allPanels[[length(allPanels)]]$id])
-		trueGenos <- g[as.character(pop[[gen + 1]]@id),]
-		# get id's for inds with high-density genotypes (parents)
-		highDensInds <- unique(c(ped[,1], ped[,2]))
-		highDensInds <- highDensInds[highDensInds > 0]
-		g[!rownames(g) %in% highDensInds,!colnames(g) %in% allPanels[[i]]$id] <- 9 # low density offspring
-		
-		# impute
-		imputeDose <- data.frame(id = rownames(g))
-		# for each chromosome
-		for(j in 1:nChr){
-			tempCols <- colnames(g)[grepl(paste0("^", j, "_"), colnames(g))] # loci in chromosome j
-			write.table(g[,tempCols],
-									file = paste0(localTempDir, "/", "temp", iterationNumber, "/apGeno.txt"), 
-									sep = " ", quote = FALSE, col.names = FALSE, 
-									row.names = TRUE)
 
+		if (i == length(allPanels)){
+			# rerun with all individuals to select broodstock
 			
-			# run AlphaImpute2
-			# 1 output file prefix
-			# 2 genotype input
-			# 3 pedigree input
-			# 4 random seed
-			# 5 max thread for imputation
-			system2("bash", args = c("runAlphaImpute2.sh",
-															 paste0(localTempDir, "/", "temp", iterationNumber, "/imputeOut"),
-															 paste0(localTempDir, "/", "temp", iterationNumber, "/apGeno.txt"),
-							paste0(localTempDir, "/", "temp", iterationNumber, "/ped.txt"),
-							"7",
-							"2")) # using two threads b/c ceres has hyperthreading on all cores
+			print(Sys.time())
+			print(paste("begin selection gebv estimation: ", i))
+			# get all genotypes at smaller panel
+			g <- pullSnpGeno(pop[[1]])[,allPanels[[i]]$id]
+			for(j in 2:length(pop)) g <- rbind(g, pullSnpGeno(pop[[j]])[,allPanels[[i]]$id])
 			
-			# load results
-			tempImputeDose <- read.table(paste0(localTempDir, "/", "temp", iterationNumber, "/imputeOut.genotypes"))
-			colnames(tempImputeDose) <- c("id", tempCols)
-			imputeDose <- imputeDose %>% 
-				left_join(tempImputeDose %>% mutate(id = as.character(id)), by = "id")
-		}
-		
-		print(Sys.time())
-		print("end impute")
-		
-		# calc imputation accuracy and save
-		# although we will discuss that this means very little for GS (Calus et al 2014 doi:10.1017/S1751731114001803)
-		# get only loci/individuals in the _current_ generation that were imputed
-		imputeCalls <- imputeDose[imputeDose$id %in% rownames(trueGenos), !colnames(imputeDose) %in% allPanels[[i]]$id]
-		rownames(imputeCalls) <- imputeCalls$id
-		imputeCalls <- as.matrix(imputeCalls[,-1])
-		trueGenos <- trueGenos[rownames(imputeCalls), colnames(imputeCalls)]
-		
-		# filter out nonvariable loci
-		# loci can become fixed during the simulation
-		# and occasionally imputation will return the same genotype for all individuals
-		# correlation is undefined (0/0) when either variable is constant
-		temp <- (apply(trueGenos, 2, n_distinct) > 1) & (apply(imputeCalls, 2, n_distinct) > 1)
-		trueGenos <- trueGenos[,temp ]
-		imputeCalls <- imputeCalls[,temp]
-		rm(temp)
-		
-		imputeRes <- imputeRes %>% 
-			rbind(data.frame(genNum = gen,
-											 panelNum = i, 
-											 numLoci = nrow(allPanels[[i]]),
-											 # mean (across loci) correlation
-											 imputeAcc = mean(sapply(1:ncol(trueGenos), function(x) cor(trueGenos[,x], imputeCalls[,x]))),
-											 numLociVar = ncol(trueGenos)))
-		rm(imputeCalls) # save some memory
-		rm(trueGenos)
-		
-		# calculate GEBVs
-		# note that we are overwriting earlier variables used to calculate GEBVs
-		# write out allele freqs
-		write.table(cbind(1:length(baseAlleleFreqs[[length(allPanels)]]), baseAlleleFreqs[[length(allPanels)]]),
-								paste0(localTempDir, "/", "temp", iterationNumber, "/", "baseFreqs.txt"),
-								sep = " ", col.names = FALSE, row.names = FALSE, quote = FALSE)
-		
-		rownames(imputeDose) <- imputeDose$id
-		imputeDose <- as.matrix(imputeDose[,-1])
-		imputeDose <- imputeDose[rownames(g), colnames(g)] # make order the same as all other inputs
-		g <- imputeDose # imputed values for ALL loci (even genotyped)
-		rm(imputeDose)
-		
-		
-		p <- data.frame(id = rownames(g)) %>% 
-			left_join(trainPhenos %>% select(id, Trait_1) %>% rename(pheno = Trait_1), by = "id") # hard coded for first trait
-		
-		# phenotypes
-		# coding so that all phenotypes are above 100, missing is 0, and including an overall mean
-		p %>% mutate(pheno = pheno + abs(min(min(pheno, na.rm = TRUE), 0)) + 100, mu = 1) %>%
-			filter(!is.na(pheno)) %>% select(id, mu, pheno) %>%
-			write.table(paste0(localTempDir, "/", "temp", iterationNumber, "/", "f90dat.txt"), 
+			# calc GEBVs - no imputation
+			# write out input for blupf90
+			# write out base pop freqs for blupf90 - each time b/c different for each panel
+			write.table(cbind(1:length(baseAlleleFreqs[[i]]), baseAlleleFreqs[[i]]),
+									paste0(localTempDir, "/", "temp", iterationNumber, "/", "baseFreqs.txt"),
 									sep = " ", col.names = FALSE, row.names = FALSE, quote = FALSE)
-		# genotypes
-		# only include individuals that are either phenotyped, were selected, or are selection candidates
-		allParents<- unique(c(SP$pedigree[,"father"], SP$pedigree[,"mother"]))
-		allParents <- allParents[allParents != 0] # remove founder placeholder
-		# phenotyped, were selected, selection candidates
-		tempBool <- rownames(g) %in% unique(c(p$id[!is.na(p$pheno)], allParents, pop[[gen + 1]]@id))
-		rownames(g) <- paste0(pad_id(rownames(g)), " ")
-		write.table(g[tempBool,],
-								paste0(localTempDir, "/", "temp", iterationNumber, "/", "f90snp.txt"), 
-								sep = "", col.names = FALSE, row.names = TRUE, quote = FALSE)
-		rownames(g) <- gsub(" ", "", rownames(g)) # undo padding for blupf90 input
-		rm(tempBool)
-		# estimate gebvs with airemlf90
-		system2(command = "bash", args = c("run_blupf90.sh", paste0(localTempDir, "/", "temp", iterationNumber, "/")))
-		
-		# load in solutions
-		sol <- read.table(paste0(localTempDir, "/", "temp", iterationNumber, "/solutions"), row.names = NULL, skip = 1) %>%
-			filter(V2 == 2) # get only animal effect
-		xref <- read.table(paste0(localTempDir, "/", "temp", iterationNumber, "/f90snp.txt_XrefID"), row.names = NULL)
-		sol$levelNew <- xref$V2[match(sol$V3, xref$V1)] # append original name to solutions
-		
-		# NOTE: only using _current_ generation to calculate accuracy of gebvs
-		comp <- data.frame(id = pop[[gen + 1]]@id, gv = gv(pop[[gen + 1]])) %>% 
-			left_join(data.frame(id = as.character(sol$levelNew), gebv = sol$V4), by = "id") %>%
-			left_join(p, by = "id")
-		# calc accuracy of prediction and save
-		gebvRes <- gebvRes %>% rbind(data.frame(genNum = gen,
-																						panelNum = i, 
-																						impute = TRUE, 
-																						numLoci = nrow(allPanels[[i]]), 
-																						acc = cor(comp$gv[is.na(comp$pheno)], comp$gebv[is.na(comp$pheno)])))
+			
+			p <- data.frame(id = rownames(g)) %>% 
+				left_join(trainPhenos %>% select(id, Trait_1) %>% rename(pheno = Trait_1), by = "id") # hard coded for first trait
+			
+			# phenotypes
+			# coding so that all phenotypes are above 100, missing is 0, and including an overall mean
+			p %>% mutate(pheno = pheno + abs(min(min(pheno, na.rm = TRUE), 0)) + 100, mu = 1) %>%
+				filter(!is.na(pheno)) %>% select(id, mu, pheno) %>%
+				write.table(paste0(localTempDir, "/", "temp", iterationNumber, "/", "f90dat.txt"), 
+										sep = " ", col.names = FALSE, row.names = FALSE, quote = FALSE)
+			# genotypes
+			# only include individuals that are either phenotyped, were selected, or are selection candidates
+			allParents<- unique(c(SP$pedigree[,"father"], SP$pedigree[,"mother"]))
+			allParents <- allParents[allParents != 0] # remove founder placeholder
+			# phenotyped, were selected, selection candidates
+			tempBool <- rownames(g) %in% unique(c(p$id[!is.na(p$pheno)], allParents, pop[[gen + 1]]@id)) 
+			rownames(g) <- paste0(pad_id(rownames(g)), " ")
+			write.table(g[tempBool,], 
+									paste0(localTempDir, "/", "temp", iterationNumber, "/", "f90snp.txt"), 
+									sep = "", col.names = FALSE, row.names = TRUE, quote = FALSE)
+			rownames(g) <- gsub(" ", "", rownames(g)) # undo padding for blupf90 input
+			rm(tempBool)
+			# estimate gebvs with airemlf90
+			system2(command = "bash", args = c("run_blupf90.sh", paste0(localTempDir, "/", "temp", iterationNumber, "/")))
+			
+			# load in solutions
+			sol <- read.table(paste0(localTempDir, "/", "temp", iterationNumber, "/solutions"), row.names = NULL, skip = 1) %>%
+				filter(V2 == 2) # get only animal effect
+			xref <- read.table(paste0(localTempDir, "/", "temp", iterationNumber, "/f90snp.txt_XrefID"), row.names = NULL)
+			sol$levelNew <- xref$V2[match(sol$V3, xref$V1)] # append original name to solutions
+			
+			# NOTE: only using _current_ generation to calculate accuracy of gebvs
+			comp <- data.frame(id = pop[[gen + 1]]@id, gv = gv(pop[[gen + 1]])) %>% 
+				left_join(data.frame(id = as.character(sol$levelNew), gebv = sol$V4), by = "id") %>%
+				left_join(p, by = "id")
+			# calc accuracy of prediction and save
+			gebvRes <- gebvRes %>% rbind(data.frame(genNum = gen,
+																							panelNum = i + 1, 
+																							impute = FALSE, 
+																							numLoci = nrow(allPanels[[i]]), 
+																							acc = cor(comp$gv[is.na(comp$pheno)], comp$gebv[is.na(comp$pheno)])))
+			# calculate maf and He with the panel for the current generation
+			curGen_maf <- sapply(colSums(g[pop[[gen + 1]]@id,]) / (2*length(pop[[gen + 1]]@id)),
+													 function(x){return(min(x, 1 - x))})
+			curGen_He <- 1 - curGen_maf^2 - (1-curGen_maf)^2
+			# save means
+			He_res <- He_res %>% rbind(data.frame(genNum = gen,
+																						panelNum = i + 1,
+																						numLoci = nrow(allPanels[[i]]),
+																						He = mean(curGen_He),
+																						meanMaf = mean(curGen_maf)))
+			
+		}
 	}
 	
 	# make next generation
@@ -405,7 +333,5 @@ for(gen in 1:nGenerations){
 																nProgeny = nOffspringPerCross)
 	}
 }
-# initial testing, save everything
-# save.image(paste0("multGen_scrm_", iterationNumber, ".rda"))
 # for low memory use
-save(snpGen, imputeRes, gebvRes, He_res, file = paste0("rda/multGen_scrm_small_", iterationNumber, ".rda"))
+save(snpGen, imputeRes, gebvRes, He_res, file = paste0("rda/curGenOnly_scrm_", iterationNumber, ".rda"))
