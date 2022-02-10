@@ -334,4 +334,4 @@ for(gen in 1:nGenerations){
 	}
 }
 # for low memory use
-save(snpGen, imputeRes, gebvRes, He_res, file = paste0("rda/curGenOnly_scrm_", iterationNumber, ".rda"))
+save(imputeRes, gebvRes, He_res, file = paste0("rda/curGenOnly_scrm_", iterationNumber, ".rda"))
