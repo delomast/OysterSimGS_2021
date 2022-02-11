@@ -190,7 +190,129 @@ greedyChooseLoci <- function(num, genos, map){
 	return(panel %>% arrange(chr, site))
 }
 
+#' Implementation that reads directly from VCF and reduces memory usage
+#' Assumes phased and imputed, so NO MISSING GENOTYPES
+#' 
+#' greedy algorithm to choose markers for a genetic panel
+#' from Matukumalli et al. 2009 https://doi.org/10.1371/journal.pone.0005350
+#' Assumes there are enough SNPs in each chromosome to meet the requested number
+#' Note that it will not choose the first or last marker on the chromosome until
+#' the very end
+#' 
+#' 
+#' @param num data.frame with chromosome name (in VCF) in the first column and
+#'   number of loci to choose in the second column,
+#' @param vcfPath path to vcf file
+#' @param numLines number of lines of VCF to read at one time
+#' @return a data.frame with the chr, pos, and "line number" (1 is first locus in the 
+#'   vcf file) of the selected loci. some other columns are also returned with 
+#'   information relevant to the algorithm (score, lastStart, lastEnd)
+vcf_greedyChooseLoci <- function(num, vcfPath, numLines = 20000){
+	colnames(num) <- c("chr", "num")
+	
+	# read in VCF and calculate maf for each locus
+	f <- file(vcfPath, "r") # open vcf
+	on.exit(close(f))
+	# move to end of header
+	genos <- readLines(f, n = numLines)
+	while(length(genos) > 0){
+		endHeader <- which(grepl("^#CHROM", genos))
+		if(length(endHeader) > 0){
+			genos <- genos[endHeader:length(genos)]
+			break
+		}
+		genos <- readLines(f, n = numLines)
+	}
+	# read in individual names
+	indNames <- str_split(genos[1], "\t")[[1]][-(1:9)]
+	genos <- genos[-1] # now it's just locus info (or empty if numLines = 1 or no loci in file)
+	
+	# storage for locus info, will have 4 cols:
+	# chr, pos, maf, lineNumber
+	locusInfo <- data.frame()
+	# now read in chunks
+	lineAdjust <- 0
+	genos <- c(genos, readLines(f, n = numLines - length(line)))
+	while(length(genos) > 0){
+		# splits columns by tabs and genotypes by "|"
+		# so starting with col 10, each col is a haplotype and each pair
+		# of columns is an individual (i.e. col 10 and 11, col 12 and 13, ...)
+		genos <- str_split(genos, "\t|\\|", simplify = TRUE)
+		
+		chrPos <- genos[,1:2] # save position info
 
+		# now we select only the genotypes and convert to numeric
+		# loci are still rows and haplotypes are columns
+		genos <- matrix(as.numeric(genos[,10:ncol(genos)]), ncol = (ncol(genos) - 9))
+		
+		# check for any with more than 2 alleles 
+		# (note: assumes no NA values)
+		if(any(!(genos %in% c(0,1)))){
+			stop("Possible locus (loci) with more than 2 alleles, missing genotype, or non standard allele coding found. ",
+					 "within loci numbers ", lineAdjust + 1, " - ", lineAdjust + nrow(genos))
+		}
+		
+		# save chr, pos, alt allele freq, line number
+		locusInfo <- rbind(locusInfo,
+											 data.frame(chr = chrPos[,1],
+											 					 pos = as.numeric(chrPos[,2]),
+											 					 # note this is alt freq right now
+											 					 maf = rowSums(genos) / ncol(genos),
+											 					 lineNumber = lineAdjust + 1:nrow(genos)))
+		lineAdjust <- lineAdjust + nrow(genos)
+		genos <- readLines(f, n = numLines)	
+	}
+	
+	# calc minor allele freq
+	tempBool <- locusInfo$maf > 0.5
+	locusInfo$maf[tempBool] <- 1 - locusInfo$maf[tempBool]
+	rm(tempBool)
+	
+	# now run greedy algorithm
+	panel <- data.frame()
+	for(i in 1:nrow(num)){ # for each chr
+		cands <- locusInfo %>% filter(chr == num$chr[i])
+		if(nrow(cands) < num$num[i]){
+			warning("Not enough SNPs in chromosome ", num$chr[i])
+			break
+		}
+		# calculate scores at the start
+		cands <- cands %>% 
+			mutate(score = scoreGreedy(start = 0, end = max(.[["pos"]]), maf = maf, pos = pos),
+						 lastStart = 0,
+						 lastEnd = max(.[["pos"]]))
+		numSNPs <- 0
+		while(TRUE){ # for each desired SNP
+			# choose SNP
+			temp <- which.max(cands$score)
+			chosen <- cands %>% slice(temp)
+			panel <- panel %>% bind_rows(chosen)
+			cands <- cands[-temp,]
+			numSNPs <- numSNPs + 1
+			if(numSNPs == num$num[i]) break
+			
+			# recalculate scores for affected SNPs
+			# only those whose interval used for the last calculation are affected
+			# note that there is only one interval to update b/c the new SNP can only
+			# have been in one interval
+			toUpdate <- cands %>% filter(lastStart < chosen$pos & lastEnd > chosen$pos) %>%
+				select(lastStart, lastEnd) %>% distinct() # this is some bs to help vectorize operations for R
+			tempBool <- cands$lastStart == toUpdate$lastStart & cands$pos < chosen$pos
+			cands$score[tempBool] <- scoreGreedy(start = toUpdate$lastStart,
+																					 end = chosen$pos,
+																					 maf = cands$maf[tempBool],
+																					 pos = cands$pos[tempBool])
+			cands$lastEnd[tempBool] <- chosen$pos
+			tempBool <- cands$lastStart == toUpdate$lastStart & cands$pos > chosen$pos
+			cands$score[tempBool] <- scoreGreedy(start = chosen$pos,
+																					 end = toUpdate$lastEnd,
+																					 maf = cands$maf[tempBool],
+																					 pos = cands$pos[tempBool])
+			cands$lastStart[tempBool] <- chosen$pos
+		}
+	}
+	return(panel %>% arrange(chr, pos))
+}
 
 #' random choice of SNPs
 #' 
@@ -248,7 +370,7 @@ read_vcf_for_AlphaSimR <- function(vcfPath, numLines = 20000){
 		if(any(!(genos %in% c(0,1)))){
 			# only spend time looking locus by locus if there is a hit
 			toRemove <- apply(genos, 2, function(x) any(!(x %in% c(0,1))))
-			genos <- genos[,!toRemove][1:10,1:10]
+			genos <- genos[,!toRemove]
 		}
 		
 		allGenos <- cbind(allGenos, genos)
