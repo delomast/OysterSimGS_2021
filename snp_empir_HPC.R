@@ -31,33 +31,40 @@ inputVCFpath <- cmdArgs[4]
 set.seed(randSeed)
 
 # define number of loci per chr for greedy algorithm
-num <- data.frame(chr = c("NC_047559.1",
-													"NC_047560.1",
-													"NC_047561.1",
-													"NC_047562.1",
-													"NC_047563.1",
-													"NC_047564.1",
-													"NC_047565.1",
-													"NC_047566.1",
-													"NC_047567.1",
-													"NC_047568.1"),
-									num = c(55785328,
-												 73222313,
-												 58319100,
-												 53127865,
-												 73550375,
-												 60151564,
-												 62107823,
-												 58462999,
-												 37089910,
-												 57541580)
-)
-chrLen <- num$num
-num$num <- round(50000 * (num$num / sum(num$num)))
-# account for any rounding error
-num$num[which.max(num$num)] <- num$num[which.max(num$num)] + 50000 - sum(num$num)
+# and max number of loci
+if(grepl("mbp_simInput.vcf$", inputVCFpath)){
+	num <- data.frame(chr = c("NC_047559.1",
+														"NC_047560.1",
+														"NC_047561.1",
+														"NC_047562.1",
+														"NC_047563.1",
+														"NC_047564.1",
+														"NC_047565.1",
+														"NC_047566.1",
+														"NC_047567.1",
+														"NC_047568.1"),
+										num = c(55785328,
+														73222313,
+														58319100,
+														53127865,
+														73550375,
+														60151564,
+														62107823,
+														58462999,
+														37089910,
+														57541580)
+	)
+	maxSNPchip <- 45000
+} else {
+	stop("not set up for input VCF")
+}
 
-nChr <- 10
+chrLen <- num$num
+num$num <- round(maxSNPchip * (num$num / sum(num$num)))
+# account for any rounding error
+num$num[which.max(num$num)] <- num$num[which.max(num$num)] + maxSNPchip - sum(num$num)
+
+nChr <- nrow(num)
 
 # variable name is a little misleading, comes from simulated genome script
 # this will be the number of broodstock used AFTER the founder generation
@@ -129,7 +136,7 @@ print("begin panel design")
 # SNP panel "design"
 
 # number of loci in each panel to compare
-numLoci <- c(100, 250, 500, 750, 1000, 2000, 5000, 10000, 25000, 50000)
+numLoci <- c(100, 250, 500, 750, 1000, 2000, 5000, 10000, 25000, maxSNPchip)
 
 snpMap <- getSnpMap()
 
@@ -456,4 +463,4 @@ for(gen in 1:nGenerations){
 # initial testing, save everything
 # save.image(paste0("multGen_scrm_", iterationNumber, ".rda"))
 # for low memory use
-save(snpGen, imputeRes, gebvRes, He_res, file = paste0("rda/multGen_scrm_small_", iterationNumber, ".rda"))
+save(imputeRes, gebvRes, He_res, file = paste0("rda/multGen_empir_small_", iterationNumber, ".rda"))
