@@ -54,7 +54,7 @@ if(grepl("mbp_simInput.vcf$", inputVCFpath)){
 														37089910,
 														57541580)
 	)
-	maxSNPchip <- 45000
+	maxSNPchip <- 40000
 } else {
 	stop("not set up for input VCF")
 }
@@ -93,7 +93,11 @@ qtlPerChr <- c()
 qtlPos <- list() # position of preselected QTLs
 snpPos <- list() # position of preselected SNP chip loci
 for(i in 1:nrow(num)){
+	# record number of qtl for inputing into AlphaSimR
 	qtlPerChr <- c(qtlPerChr, sum(chosenLoci[[1]]$chr == num$chr[i]))
+	# updating number of SNP chip loci in case of any reallocation
+	num$num[i] <- sum(chosenLoci[[2]]$chr == num$chr[i])
+	# create haplotype and map inputs
 	tempBool <- inputGenos[[2]]$chr == num$chr[i]
 	haplo_list[[i]] <- inputGenos[[1]][,tempBool]
 	genMap[[i]] <- inputGenos[[2]]$pos[tempBool]

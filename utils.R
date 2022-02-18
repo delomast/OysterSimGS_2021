@@ -306,6 +306,7 @@ vcf_greedyChooseLoci <- function(num, vcfPath, numLines = 20000, numRand = 1000)
 			}
 		}
 		num$num <- num$num + toRealloc
+		if(totalSnps != sum(num$num)) stop("Error reallocating. Totals don't match.")
 	}
 	
 	# now run greedy algorithm
