@@ -55,6 +55,7 @@ if(grepl("mbp_simInput.vcf$", inputVCFpath)){
 														57541580)
 	)
 	maxSNPchip <- 40000
+	prefix <- "MBP"
 } else {
 	stop("not set up for input VCF")
 }
@@ -467,4 +468,4 @@ for(gen in 1:nGenerations){
 # initial testing, save everything
 # save.image(paste0("multGen_scrm_", iterationNumber, ".rda"))
 # for low memory use
-save(imputeRes, gebvRes, He_res, file = paste0("rda/multGen_empir_small_", iterationNumber, ".rda"))
+save(imputeRes, gebvRes, He_res, file = paste0("rda/multGen_empir_small_", prefix, "_", iterationNumber, ".rda"))
