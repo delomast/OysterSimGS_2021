@@ -279,13 +279,42 @@ vcf_greedyChooseLoci <- function(num, vcfPath, numLines = 20000, numRand = 1000)
 	locusInfo <- locusInfo[-rc,]
 	rm(rc)
 	
+	# make sure enough loci and reallocate as needed
+	toRealloc <- c()
+	numSnps <- c()
+	for(i in 1:nrow(num)){ # for each chr
+		tmp <- sum(locusInfo$chr == num$chr[i])
+		numSnps <- c(numSnps, tmp)
+		toRealloc <- c(toRealloc, num$num[i] - tmp)
+		rm(tmp)
+	}
+	if(any(toRealloc > 0)){
+		if(sum(toRealloc) > 0) stop("Not enough SNPs")
+		warning("Reallocating: Not enough SNPs in one or more chromosomes")
+		totalSnps <- sum(num$num) # for checking
+		numToReall <- sum(toRealloc[toRealloc > 0])
+		# distribute proportion to excess SNPs, making sure the total matches
+		# and the limit on all other chr isn't exceeded
+		ch <- c()
+		for(i in 1:length(toRealloc)) if(toRealloc[i] < 0) ch <- c(ch, rep(i, -1 * toRealloc[i]))
+		addSnps <- sample(ch, numToReall, replace = FALSE)
+		for(i in 1:length(toRealloc)){
+			if(toRealloc[i] > 0){
+				toRealloc[i] <- toRealloc[i] * -1
+			} else {
+				toRealloc[i] <- sum(addSnps == i)
+			}
+		}
+		num$num <- num$num + toRealloc
+	}
+	
 	# now run greedy algorithm
 	panel <- data.frame()
 	for(i in 1:nrow(num)){ # for each chr
 		cands <- locusInfo %>% filter(chr == num$chr[i])
 		if(nrow(cands) < num$num[i]){
-			warning("Not enough SNPs in chromosome ", num$chr[i])
-			break
+			# should never get here b/c of reallocation above
+			stop("Not enough SNPs in chromosome ", num$chr[i])
 		}
 		# calculate scores at the start
 		cands <- cands %>% 
