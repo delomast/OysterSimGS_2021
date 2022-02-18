@@ -3,9 +3,7 @@
 # phased SNP file and stacks haplotype file from v2.55 (pre 2.57)
 # used to evaluate mbp data from Neil
 # 
-# Seems that genotypes from stacks for SNPs and haplotypes
-# are not consistent for individual SNPs, so this is written
-# to skip and snps that don't have consistent genotypes
+# trying a different way
 # 
 
 import sys
@@ -69,71 +67,55 @@ def Main():
 			print(hapLoc)
 			return
 		
+		nonMatchLocus = 0
+		se1 = [0] * len(masterSamp)
+		se2 = [0] * len(masterSamp)
+		numHet = [0] * len(masterSamp)
 		# get variants from snp VCF
 		# start and stop are 0-based, half-open
-		snpVars = [] # list of variant objects
-		relPos = [] # list of relative position in haplotype from haplotype record, 0 based
 		for x in snpIn.fetch(contig = hapLoc.chrom, start = snpPosGenome[0] - 1, stop = snpPosGenome[-1]):
 			for i in range(0, len(snpPosGenome)):
-				if x.pos == snpPosGenome[i] and x.id.split(":")[0] == hapLoc.id.split(:)[0]:
-					snpVars += [x]
-					relPos += [i]
+				if x.pos == snpPosGenome[i] and x.id.split(":")[0] == hapLoc.id.split(":")[0]:
+					for j in range(0, len(masterSamp)):
+						ind = masterSamp[j]
+						# skip if missing genotype
+						if hapLoc.samples[ind]["GT"][0] is None:
+							continue
+						a1 = x.alleles[x.samples[ind]["GT"][0]]
+						a2 = x.alleles[x.samples[ind]["GT"][1]]
+						if a1 == a2: # only evaluate if genotype is het
+							continue
+						numHet[j] += 1
+						hap1 = hapLoc.alleles[hapLoc.samples[ind]["GT"][0]][i]
+						hap2 = hapLoc.alleles[hapLoc.samples[ind]["GT"][1]][i]
+						if a1 == hap1 and a2 == hap2:
+							se2[j] += 1
+						elif a1 == hap2 and a2 == hap1:
+							se1[j] += 1
+						else:
+							print("non matching alleles")
+							print(x)
+							print(" ")
+							print(i)
+							print(" ")
+							print(hapLoc)
+							print(ind, " ", j)
+							return
+							# nonMatchLocus += 1
+							# numHet -= 1
 					break
+		
+		compareLocus = 0
+		seLocus = 0
+		for i in range(0, len(masterSamp)):
+			if numHet[i] > 1:
+				compareLocus += numHet[i]
+				seLocus += min(se1[i], se2[i])
 
-		# make sure at least two variants in snp file
-		if len(snpVars) < 2:
-			continue
-		
-		# now for each individual
-		# build up variants into haplotypes at het positions
-		# compare het positions to haplotype vcf
-		compareLocus = 0 # number of comparisons per locus
-		seLocus = 0 # number of switch errors per locus
-		nonMatchLocus = 0
-		for ind in masterSamp:
-			# skip if missing genotype
-			if hapLoc.samples[ind]["GT"][0] is None:
-				continue
-			# number of switch errors for both possible orientations
-			se1 = 0
-			se2 = 0
-			# number of het genos
-			numHet = 0
-			# for each snp in haplotype
-			for i in range(0, len(snpVars)):
-				a1 = snpVars[i].alleles[snpVars[i].samples[ind]["GT"][0]]
-				a2 = snpVars[i].alleles[snpVars[i].samples[ind]["GT"][1]]
-				if a1 == a2: # only evaluate if genotype is het
-					continue
-				numHet += 1
-				hap1 = hapLoc.alleles[hapLoc.samples[ind]["GT"][0]][relPos[i]]
-				hap2 = hapLoc.alleles[hapLoc.samples[ind]["GT"][1]][relPos[i]]
-				if a1 == hap1 and a2 == hap2:
-					se2 += 1
-				elif a1 == hap2 and a2 == hap1:
-					se1 += 1
-				else:
-					# print("non matching alleles")
-					# print(snpVars[i])
-					# print(" ")
-					# print(relPos[i])
-					# print(" ")
-					# print(hapLoc)
-					# return
-					nonMatchLocus += 1
-					numHet -= 1
-			
-			# must be 2+ het genotypes for phasing to be non trivial
-			if numHet < 2:
-				continue
-			
-			compareLocus += numHet
-			seLocus += min(se1, se2)
-		
 		print(hapLoc.chrom, hapLoc.pos)
 		print(seLocus)
 		print(compareLocus)
-		print(nonMatchLocus)
+		# print(nonMatchLocus)
 		if compareLocus > 0:
 			print(seLocus / compareLocus)
 

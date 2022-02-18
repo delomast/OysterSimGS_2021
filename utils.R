@@ -193,6 +193,9 @@ greedyChooseLoci <- function(num, genos, map){
 #' Implementation that reads directly from VCF and reduces memory usage
 #' Assumes phased and imputed, so NO MISSING GENOTYPES
 #' 
+#' This FIRST chooses some loci at random (i.e., QTL), then runs the greedy
+#' algorithm with the remaining loci.
+#' 
 #' greedy algorithm to choose markers for a genetic panel
 #' from Matukumalli et al. 2009 https://doi.org/10.1371/journal.pone.0005350
 #' Assumes there are enough SNPs in each chromosome to meet the requested number
@@ -201,13 +204,15 @@ greedyChooseLoci <- function(num, genos, map){
 #' 
 #' 
 #' @param num data.frame with chromosome name (in VCF) in the first column and
-#'   number of loci to choose in the second column,
+#'   number of loci to choose in the second column for the greedy algorithm
 #' @param vcfPath path to vcf file
 #' @param numLines number of lines of VCF to read at one time
-#' @return a data.frame with the chr, pos, and "line number" (1 is first locus in the 
+#' @param numRand number of random loci to choose first
+#' @return a list of two data.frames with the chr, pos, and "line number" (1 is first locus in the 
 #'   vcf file) of the selected loci. some other columns are also returned with 
-#'   information relevant to the algorithm (score, lastStart, lastEnd)
-vcf_greedyChooseLoci <- function(num, vcfPath, numLines = 20000){
+#'   information relevant to the algorithm (score, lastStart, lastEnd).
+#'   The first data.frame is the random and the second is the greedy algorithm.
+vcf_greedyChooseLoci <- function(num, vcfPath, numLines = 20000, numRand = 1000){
 	colnames(num) <- c("chr", "num")
 	
 	# read in VCF and calculate maf for each locus
@@ -268,6 +273,12 @@ vcf_greedyChooseLoci <- function(num, vcfPath, numLines = 20000){
 	locusInfo$maf[tempBool] <- 1 - locusInfo$maf[tempBool]
 	rm(tempBool)
 	
+	# now choose random loci
+	rc <- sample(1:nrow(locusInfo), size = numRand, replace = FALSE)
+	randLoci <- locusInfo[rc,]
+	locusInfo <- locusInfo[-rc,]
+	rm(rc)
+	
 	# now run greedy algorithm
 	panel <- data.frame()
 	for(i in 1:nrow(num)){ # for each chr
@@ -311,7 +322,79 @@ vcf_greedyChooseLoci <- function(num, vcfPath, numLines = 20000){
 			cands$lastStart[tempBool] <- chosen$pos
 		}
 	}
-	return(panel %>% arrange(chr, pos))
+	return(list(randLoci = randLoci %>% arrange(chr, pos), greedyLoci = panel %>% arrange(chr, pos)))
+}
+
+#' read in haplotypes from a vcf file using the line number outputs from 
+#' vcf_greedyChooseLoci
+#' @param vcfPath path to vcf file
+#' @param lineNumbers line numbers of the loci in the vcf file to keep. 
+#'   First locus in the file is line 1.
+#' @param numLines number of lines of VCF to read at one time
+#' @return a list of a matrix (haplotypes, rows as haplotypes, cols as loci, adjacent 
+#'   rows are individuals) and 
+#'   data.frame of chr and pos (same order as cols of matrix)
+vcf_readLoci <- function(vcfPath, lineNumbers, numLines = 20000){
+	# read in VCF and calculate maf for each locus
+	f <- file(vcfPath, "r") # open vcf
+	on.exit(close(f))
+	# move to end of header
+	genos <- readLines(f, n = numLines)
+	while(length(genos) > 0){
+		endHeader <- which(grepl("^#CHROM", genos))
+		if(length(endHeader) > 0){
+			genos <- genos[endHeader:length(genos)]
+			break
+		}
+		genos <- readLines(f, n = numLines)
+	}
+	# read in individual names
+	indNames <- str_split(genos[1], "\t")[[1]][-(1:9)]
+	genos <- genos[-1] # now it's just locus info (or empty if numLines = 1 or no loci in file)
+	
+	saveGenos <- matrix(nrow = 0, ncol = 2 * length(indNames))
+	saveMap <- data.frame()
+	
+	# now read in chunks
+	lineAdjust <- 0
+	genos <- c(genos, readLines(f, n = numLines - length(line)))
+	while(length(genos) > 0){
+		laNext <- length(genos)
+		lineBool <- (lineAdjust + (1:laNext)) %in% lineNumbers
+		if(sum(lineBool) > 0){
+			# only process lines you need
+			genos <- genos[lineBool]
+			# shorten list of lines to look for
+			lineNumbers <- lineNumbers[!lineNumbers %in% (lineAdjust + (1:laNext)[lineBool])]
+			
+			# splits columns by tabs and genotypes by "|"
+			# so starting with col 10, each col is a haplotype and each pair
+			# of columns is an individual (i.e. col 10 and 11, col 12 and 13, ...)
+			genos <- str_split(genos, "\t|\\|", simplify = TRUE)
+			
+			chrPos <- genos[,1:2] # save position info
+			
+			# now we select only the genotypes and convert to numeric
+			# loci are still rows and haplotypes are columns
+			genos <- matrix(as.numeric(genos[,10:ncol(genos)]), ncol = (ncol(genos) - 9))
+			
+			# check for any with more than 2 alleles 
+			# (note: assumes no NA values)
+			if(any(!(genos %in% c(0,1)))){
+				stop("Possible locus (loci) with more than 2 alleles, missing genotype, or non standard allele coding found. ",
+						 "within loci numbers ", lineAdjust + 1, " - ", lineAdjust + nrow(genos))
+			}
+			
+			# save chr, pos, genos
+			saveGenos <- rbind(saveGenos, genos)
+			saveMap <- rbind(saveMap, data.frame(chr = chrPos[,1],
+																					 pos = as.numeric(chrPos[,2])))
+		}
+		lineAdjust <- lineAdjust + laNext
+		genos <- readLines(f, n = numLines)
+	}
+	
+	return(list(genos = t(saveGenos), map = saveMap))
 }
 
 #' random choice of SNPs
