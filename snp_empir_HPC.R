@@ -151,6 +151,37 @@ tempNum <- lapply(numLoci, function(x){
 	dfOut <- data.frame(chr = 1:nChr, num = round(x * (chrLen/ sum(chrLen)))) # proportional to chr length
 	# account for rounding error (in same way as above, so numbers match w/ largest panel)
 	dfOut$num[which.max(dfOut$num)] <- dfOut$num[which.max(dfOut$num)] + x - sum(dfOut$num)
+	
+	# make sure enough loci and reallocate as needed
+	toRealloc <- c()
+	numSnps <- c()
+	for(i in 1:nrow(dfOut)){ # for each chr
+		tmp <- sum(snpMap$chr == dfOut$chr[i]) # number of snps available
+		numSnps <- c(numSnps, tmp)
+		toRealloc <- c(toRealloc, dfOut$num[i] - tmp)
+		rm(tmp)
+	}
+	if(any(toRealloc > 0)){
+		if(sum(toRealloc) > 0) stop("Not enough SNPs")
+		warning("Reallocating: Not enough SNPs in one or more chromosomes")
+		totalSnps <- sum(dfOut$num) # for checking
+		numToReall <- sum(toRealloc[toRealloc > 0])
+		# distribute proportion to excess SNPs, making sure the total matches
+		# and the limit on all other chr isn't exceeded
+		ch <- c()
+		for(i in 1:length(toRealloc)) if(toRealloc[i] < 0) ch <- c(ch, rep(i, -1 * toRealloc[i]))
+		addSnps <- sample(ch, numToReall, replace = FALSE)
+		for(i in 1:length(toRealloc)){
+			if(toRealloc[i] > 0){
+				toRealloc[i] <- toRealloc[i] * -1
+			} else {
+				toRealloc[i] <- sum(addSnps == i)
+			}
+		}
+		dfOut$num <- dfOut$num + toRealloc
+		if(totalSnps != sum(dfOut$num)) stop("Error reallocating. Totals don't match.")
+	}
+	
 	return(dfOut)
 })
 

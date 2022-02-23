@@ -149,8 +149,7 @@ greedyChooseLoci <- function(num, genos, map){
 	for(i in 1:nrow(num)){ # for each chr
 		cands <- map %>% filter(chr == num$chr[i])
 		if(nrow(cands) < num$num[i]){
-			warning("Not enough SNPs in chromosome ", num$chr[i])
-			break
+			stop("Not enough SNPs in chromosome ", num$chr[i])
 		}
 		# calculate scores at the start
 		cands <- cands %>% 
