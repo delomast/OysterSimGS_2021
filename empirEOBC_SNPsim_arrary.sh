@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=1  # ask for 1 cpu
 #SBATCH --mem=45G # Maximum amount of memory this job will be given
 #SBATCH --time=47:00:00 # ask that the job be allowed to run for 
-#SBATCH --array=36-70%75 #specify how many jobs in the array and limit number running concurrently (e.g. 1-96%40)
+#SBATCH --array=36-69%75 #specify how many jobs in the array and limit number running concurrently (e.g. 1-96%40)
 #SBATCH --output=arrayScrm_%a.out # tell it where to store the output console text
 
 echo "My SLURM_JOB_ID: " $SLURM_JOB_ID
@@ -30,7 +30,7 @@ mkdir /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"
 echo "Begin subsampling vcf"
 # subsample VCF file
 # 1% of varients, which is approx 100,000 SNPs
-bcftools view east_consor.vcf | perl -nle 'BEGIN { srand($x) } if (/^#/){ print; next }; print if rand(1) < 0.01' > /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"/subSamp_east_consor.vcf
+bcftools view ../seq_data/east_consor.vcf | perl -nle 'BEGIN { srand($x) } if (/^#/){ print; next }; print if rand(1) < 0.01' > /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"/subSamp_east_consor.vcf
 
 echo "End subsampling vcf"
 # run simulation
