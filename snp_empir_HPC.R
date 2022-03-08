@@ -10,7 +10,6 @@ print("begin")
 .libPaths(c(.libPaths(), "/project/oyster_gs_sim/R_packages/4.1/"))
 library(AlphaSimR, lib.loc="/project/oyster_gs_sim/R_packages/4.1/")
 library(tidyverse, lib.loc="/project/oyster_gs_sim/R_packages/4.1/")
-# library(rrBLUP, lib.loc="/project/oyster_gs_sim/R_packages/4.1/")
 library(optiSel, lib.loc="/project/oyster_gs_sim/R_packages/4.1/")
 library(AllocateMate, lib.loc="/project/oyster_gs_sim/R_packages/4.1/")
 
@@ -56,6 +55,30 @@ if(grepl("mbp_simInput.vcf$", inputVCFpath)){
 	)
 	maxSNPchip <- 40000
 	prefix <- "MBP"
+} else if(grepl("east_consor.vcf$", inputVCFpath)) {
+	num <- data.frame(chr = c("NC_035789.1",
+														"NC_035780.1",
+														"NC_035781.1",
+														"NC_035782.1",
+														"NC_035783.1",
+														"NC_035784.1",
+														"NC_035785.1",
+														"NC_035786.1",
+														"NC_035787.1",
+														"NC_035788.1"),
+										num = c(32650045, 
+														65668440,
+														61752955, 
+														77061148, 
+														59691872, 
+														98698416, 
+														51258098, 
+														57830854, 
+														75944018, 
+														104168038)
+	)
+	maxSNPchip <- 50000
+	prefix <- "EOBC"
 } else {
 	stop("not set up for input VCF")
 }
@@ -102,7 +125,7 @@ for(i in 1:nrow(num)){
 	tempBool <- inputGenos[[2]]$chr == num$chr[i]
 	haplo_list[[i]] <- inputGenos[[1]][,tempBool]
 	genMap[[i]] <- inputGenos[[2]]$pos[tempBool]
-	genMap[[i]] <- genMap[[i]] / sum(genMap[[i]]) # normalize to 1M
+	genMap[[i]] <- genMap[[i]] / num$num[i] # normalize to 1M
 	qtlPos[[i]] <- which(inputGenos[[2]]$pos[tempBool] %in% chosenLoci[[1]]$pos[chosenLoci[[1]]$chr == num$chr[i]])
 	snpPos[[i]] <- which(inputGenos[[2]]$pos[tempBool] %in% chosenLoci[[2]]$pos[chosenLoci[[2]]$chr == num$chr[i]])
 }
