@@ -79,6 +79,30 @@ if(grepl("mbp_simInput.vcf$", inputVCFpath)){
 	)
 	maxSNPchip <- 50000
 	prefix <- "EOBC"
+} else if(grepl("ngulf.vcf$", inputVCFpath)) {
+	num <- data.frame(chr = c("NC_035789.1",
+														"NC_035780.1",
+														"NC_035781.1",
+														"NC_035782.1",
+														"NC_035783.1",
+														"NC_035784.1",
+														"NC_035785.1",
+														"NC_035786.1",
+														"NC_035787.1",
+														"NC_035788.1"),
+										num = c(32650045, 
+														65668440,
+														61752955, 
+														77061148, 
+														59691872, 
+														98698416, 
+														51258098, 
+														57830854, 
+														75944018, 
+														104168038)
+	)
+	maxSNPchip <- 2000
+	prefix <- "Ngulf"
 } else {
 	stop("not set up for input VCF")
 }
@@ -165,6 +189,7 @@ print("begin panel design")
 
 # number of loci in each panel to compare
 numLoci <- c(100, 250, 500, 750, 1000, 2000, 5000, 10000, 25000, maxSNPchip)
+numLoci <- numLoci[numLoci <= maxSNPchip]
 
 snpMap <- getSnpMap()
 

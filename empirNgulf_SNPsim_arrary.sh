@@ -5,13 +5,12 @@
 #SBATCH --cpus-per-task=1  # ask for 1 cpu
 #SBATCH --mem=45G # Maximum amount of memory this job will be given
 #SBATCH --time=47:00:00 # ask that the job be allowed to run for 
-#SBATCH --array=36-70%75 #specify how many jobs in the array and limit number running concurrently (e.g. 1-96%40)
+#SBATCH --array=1-35%75 #specify how many jobs in the array and limit number running concurrently (e.g. 1-96%40)
 #SBATCH --output=arrayScrm_%a.out # tell it where to store the output console text
 
 echo "My SLURM_JOB_ID: " $SLURM_JOB_ID
 echo "My SLURM_ARRAY_TASK_ID: " $SLURM_ARRAY_TASK_ID
 
-module load bcftools
 module load r/4.1.2
 
 # check for random seeds
@@ -27,16 +26,10 @@ echo "My random seed is: " $x
 # make temp directory
 mkdir /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"
 
-echo "Begin subsampling vcf"
-# subsample VCF file
-# 1% of varients, which is approx 100,000 SNPs
-bcftools view east_consor.vcf | perl -nle 'BEGIN { srand($x) } if (/^#/){ print; next }; print if rand(1) < 0.01' > /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"/subSamp_east_consor.vcf
-
-echo "End subsampling vcf"
 # run simulation
 
 # randomSeed iterationNumber TemporaryLocalStorageDirectory vcfInputPath
-Rscript snp_empir_HPC.R $x $SLURM_ARRAY_TASK_ID /90daydata/oyster_gs_sim/ /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"/east_consor.vcf
+Rscript snp_empir_HPC.R $x $SLURM_ARRAY_TASK_ID /90daydata/oyster_gs_sim/ ../seq_data/ngulf.vcf
 
 # remove temp directory
 rm -r /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"
