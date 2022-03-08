@@ -36,7 +36,7 @@ echo "End subsampling vcf"
 # run simulation
 
 # randomSeed iterationNumber TemporaryLocalStorageDirectory vcfInputPath
-Rscript snp_empir_HPC.R $x $SLURM_ARRAY_TASK_ID /90daydata/oyster_gs_sim/ /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"/east_consor.vcf
+Rscript snp_empir_HPC.R $x $SLURM_ARRAY_TASK_ID /90daydata/oyster_gs_sim/ /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"/subSamp_east_consor.vcf
 
 # remove temp directory
 rm -r /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"
