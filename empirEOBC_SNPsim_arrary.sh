@@ -27,16 +27,16 @@ echo "My random seed is: " $x
 # make temp directory
 mkdir /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"
 
-echo "Begin subsampling vcf"
+# echo "Begin subsampling vcf"
 # subsample VCF file
 # 1% of varients, which is approx 100,000 SNPs
-bcftools view ../seq_data/east_consor.vcf | perl -nle 'BEGIN { srand($x) } if (/^#/){ print; next }; print if rand(1) < 0.01' > /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"/subSamp_east_consor.vcf
+# bcftools view ../seq_data/east_consor.vcf | perl -nle 'BEGIN { srand($x) } if (/^#/){ print; next }; print if rand(1) < 0.01' > /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"/subSamp_east_consor.vcf
 
-echo "End subsampling vcf"
+# echo "End subsampling vcf"
 # run simulation
 
 # randomSeed iterationNumber TemporaryLocalStorageDirectory vcfInputPath
-Rscript snp_empir_HPC.R $x $SLURM_ARRAY_TASK_ID /90daydata/oyster_gs_sim/ /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"/subSamp_east_consor.vcf
+Rscript snp_empir_HPC.R $x $SLURM_ARRAY_TASK_ID /90daydata/oyster_gs_sim/ ../seq_data/east_consor.vcf 
 
 # remove temp directory
 rm -r /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"
