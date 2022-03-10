@@ -54,6 +54,7 @@ if(grepl("mbp_simInput.vcf$", inputVCFpath)){
 														57541580)
 	)
 	maxSNPchip <- 40000
+	num_choose_qtl <- 1000
 	prefix <- "MBP"
 } else if(grepl("east_consor.vcf$", inputVCFpath)) {
 	num <- data.frame(chr = c("NC_035789.1",
@@ -78,6 +79,7 @@ if(grepl("mbp_simInput.vcf$", inputVCFpath)){
 														104168038)
 	)
 	maxSNPchip <- 50000
+	num_choose_qtl <- 1000
 	prefix <- "EOBC"
 } else if(grepl("ngulf.vcf$", inputVCFpath)) {
 	num <- data.frame(chr = c("NC_035789.1",
@@ -102,12 +104,14 @@ if(grepl("mbp_simInput.vcf$", inputVCFpath)){
 														104168038)
 	)
 	maxSNPchip <- 2000
+	num_choose_qtl <- 100
 	prefix <- "Ngulf"
 } else {
 	stop("not set up for input VCF")
 }
 
 chrLen <- num$num
+num$length <- num$num # save length as a separate variable
 num$num <- round(maxSNPchip * (num$num / sum(num$num)))
 # account for any rounding error
 num$num[which.max(num$num)] <- num$num[which.max(num$num)] + maxSNPchip - sum(num$num)
@@ -127,7 +131,7 @@ print(Sys.time())
 print("begin loading genotypes")
 
 # choose random and panel
-chosenLoci <- vcf_greedyChooseLoci(num = num, vcfPath = inputVCFpath, numLines = 20000, numRand = 1000)
+chosenLoci <- vcf_greedyChooseLoci(num = num, vcfPath = inputVCFpath, numLines = 20000, numRand = num_choose_qtl)
 
 # read genotypes from chosen loci in from VCF
 # specify by line number for speed
@@ -149,7 +153,7 @@ for(i in 1:nrow(num)){
 	tempBool <- inputGenos[[2]]$chr == num$chr[i]
 	haplo_list[[i]] <- inputGenos[[1]][,tempBool]
 	genMap[[i]] <- inputGenos[[2]]$pos[tempBool]
-	genMap[[i]] <- genMap[[i]] / num$num[i] # normalize to 1M
+	genMap[[i]] <- genMap[[i]] / num$length[i] # normalize to 1M
 	qtlPos[[i]] <- which(inputGenos[[2]]$pos[tempBool] %in% chosenLoci[[1]]$pos[chosenLoci[[1]]$chr == num$chr[i]])
 	snpPos[[i]] <- which(inputGenos[[2]]$pos[tempBool] %in% chosenLoci[[2]]$pos[chosenLoci[[2]]$chr == num$chr[i]])
 }

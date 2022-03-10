@@ -125,8 +125,6 @@ scoreGreedy <- function(start, end, maf, pos){
 }
 
 
-# num = snpMap %>% select(chr) %>% distinct %>% mutate(num = 1000)
-
 #' greedy algorithm to choose markers for a genetic panel
 #' from Matukumalli et al. 2009 https://doi.org/10.1371/journal.pone.0005350
 #' Assumes there are enough SNPs in each chromosome to meet the requested number
@@ -139,7 +137,7 @@ scoreGreedy <- function(start, end, maf, pos){
 #' @param genos genotypes (output of `AlphaSimR::pullSnpGeno`)
 #' @param map genetic map of loci (output of `AlphaSimR::getSnpMap`)
 greedyChooseLoci <- function(num, genos, map){
-	colnames(num) <- c("chr", "num")
+	colnames(num) <- c("chr", "num", "length")
 	# calc minor allele freq
 	maf <- (colSums(genos) / (2 * nrow(genos)))
 	maf[maf > 0.5] <- 1 - maf[maf > 0.5]
@@ -153,9 +151,9 @@ greedyChooseLoci <- function(num, genos, map){
 		}
 		# calculate scores at the start
 		cands <- cands %>% 
-			mutate(score = scoreGreedy(start = 0, end = max(.[["pos"]]), maf = maf, pos = pos),
+			mutate(score = scoreGreedy(start = 0, end = num$length[i], maf = maf, pos = pos),
 						 lastStart = 0,
-						 lastEnd = max(.[["pos"]]))
+						 lastEnd = num$length[i])
 		numSNPs <- 0
 		while(TRUE){ # for each desired SNP
 			# choose SNP
@@ -212,7 +210,7 @@ greedyChooseLoci <- function(num, genos, map){
 #'   information relevant to the algorithm (score, lastStart, lastEnd).
 #'   The first data.frame is the random and the second is the greedy algorithm.
 vcf_greedyChooseLoci <- function(num, vcfPath, numLines = 20000, numRand = 1000){
-	colnames(num) <- c("chr", "num")
+	colnames(num) <- c("chr", "num", "length")
 	
 	# read in VCF and calculate maf for each locus
 	f <- file(vcfPath, "r") # open vcf
@@ -318,9 +316,9 @@ vcf_greedyChooseLoci <- function(num, vcfPath, numLines = 20000, numRand = 1000)
 		}
 		# calculate scores at the start
 		cands <- cands %>% 
-			mutate(score = scoreGreedy(start = 0, end = max(.[["pos"]]), maf = maf, pos = pos),
+			mutate(score = scoreGreedy(start = 0, end = num$length[i], maf = maf, pos = pos),
 						 lastStart = 0,
-						 lastEnd = max(.[["pos"]]))
+						 lastEnd = num$length[i])
 		numSNPs <- 0
 		while(TRUE){ # for each desired SNP
 			# choose SNP
@@ -710,4 +708,105 @@ read_scrm_transpose_for_AlphaSimR <- function(path, numLoci, min_maf = 0.05, num
 	saveHaplos <- saveHaplos[-1,]
 
 	return(saveHaplos)
+}
+
+
+
+
+#' For _microhap_ panels
+#' 
+#' Implementation that reads directly from VCF and reduces memory usage
+#' Assumes phased and imputed, so NO MISSING GENOTYPES
+#' 
+#' This FIRST chooses some SNPs at random (i.e., QTL), then runs the greedy
+#' algorithm with the remaining loci.
+#' 
+#' Variant on greedy algorithm to choose markers for a genetic panel
+#' from Matukumalli et al. 2009 https://doi.org/10.1371/journal.pone.0005350
+#' Uses expected heterozygosity instead of maf as it is written to consider microhaps
+#' and SNPs
+#' Assumes there are enough windows in each chromosome to meet the requested number
+#' Note that it will not choose the first or last marker on the chromosome until
+#' the very end
+#' 
+#' 
+#' @param num data.frame with chromosome name (in VCF) in the first column and
+#'   number of loci to choose in the second column for the greedy algorithm and
+#'   chromosome length in the third column
+#' @param vcfPath path to vcf file
+#' @param windSize window size for defining microhaps
+#' @param numLines number of lines of VCF to read at one time
+#' @param numRand number of random SNPs to choose first
+#' @param tempDir temporary directory path
+#' @return a list of two data.frames with the chr, pos, and "line number" (1 is first locus in the 
+#'   vcf file) of the selected loci. some other columns are also returned with 
+#'   information relevant to the algorithm (score, lastStart, lastEnd).
+#'   The first data.frame is the random and the second is the greedy algorithm.
+vcf_mh_greedyChooseLoci <- function(num, vcfPath, windSize = 60, numLines = 20000, numRand = 1000, tempDir = ""){
+	
+	# choice random SNPs and calculate He
+	system2("py", args = c("./mhCalcHe.py", vcfPath, sample(1:1000000000, 1), numRand, tempDir, windSize))
+	# system2("python3", args = c("./mhCalcHe.py", vcfPath, sample(1:1000000000, 1), numRand, tempDir, windSize))
+	
+	# note that we are using the column name "maf" even though the quantity is
+	# He. This is so the below code, originally written wtih maf, still works
+	randLoci <- read.table(paste0(tempDir, "qtl.txt"), sep = "\t", col.names = c("lineNumber", "chr", "pos"))
+	locusInfo <- read.table(paste0(tempDir, "He.txt"), sep = "\t", col.names = c("chr", "posConcat", "maf", "lineNumber"))
+	# using first SNP position for position of microhaps
+	# also defining last position of microhap "window" to use for filtering out windows
+	# when another window containing those SNPs has been chosen
+	locusInfo <- locusInfo %>% mutate(pos = as.numeric(gsub(",.+$", "", posConcat)),
+																		endPos = as.numeric(gsub("^.+,", "", posConcat)))
+	# determining total number of SNPs
+	totalSNPcount <- n_distinct(unlist(str_split(locusInfo$posConcat, pattern = ",")))
+	
+	colnames(num) <- c("chr", "num", "length")
+	
+	# now run greedy algorithm
+	panel <- data.frame()
+	for(i in 1:nrow(num)){ # for each chr
+		cands <- locusInfo %>% filter(chr == num$chr[i])
+		
+		# calculate scores at the start
+		cands <- cands %>% 
+			mutate(score = scoreGreedy(start = 0, end = num$length[i], maf = maf, pos = pos),
+						 lastStart = 0,
+						 lastEnd = num$length[i])
+		numSNPs <- 0
+		while(TRUE){ # for each desired locus
+			if(nrow(cands) == 0) stop("not enough loci in chr ", num$chr[i])
+			# choose locus
+			temp <- which.max(cands$score)
+			chosen <- cands %>% slice(temp)
+			panel <- panel %>% bind_rows(chosen)
+			# remove chosen window and any other windows that contain SNPs in the chosen window
+			cands <- cands[!((chosen$pos <= cands$endPos & chosen$pos >= cands$pos) | 
+											 	(chosen$endPos <= cands$endPos & chosen$endPos >= cands$pos)),]
+			
+			numSNPs <- numSNPs + 1
+			if(numSNPs == num$num[i]) break
+			
+			# recalculate scores for affected loci
+			# only those whose interval used for the last calculation are affected
+			# note that there is only one interval to update b/c the new SNP can only
+			# have been in one interval
+			toUpdate <- cands %>% filter(lastStart < chosen$pos & lastEnd > chosen$pos) %>%
+				select(lastStart, lastEnd) %>% distinct() # this is some bs to help vectorize operations for R
+			tempBool <- cands$lastStart == toUpdate$lastStart & cands$pos < chosen$pos
+			cands$score[tempBool] <- scoreGreedy(start = toUpdate$lastStart,
+																					 end = chosen$pos,
+																					 maf = cands$maf[tempBool],
+																					 pos = cands$pos[tempBool])
+			cands$lastEnd[tempBool] <- chosen$pos
+			tempBool <- cands$lastStart == toUpdate$lastStart & cands$pos > chosen$pos
+			cands$score[tempBool] <- scoreGreedy(start = chosen$pos,
+																					 end = toUpdate$lastEnd,
+																					 maf = cands$maf[tempBool],
+																					 pos = cands$pos[tempBool])
+			cands$lastStart[tempBool] <- chosen$pos
+		}
+	}
+	return(list(randLoci = randLoci %>% arrange(chr, pos) %>% select(chr, pos, lineNumber), 
+							greedyLoci = panel %>% arrange(chr, pos),
+							totalSNPcount = totalSNPcount))
 }

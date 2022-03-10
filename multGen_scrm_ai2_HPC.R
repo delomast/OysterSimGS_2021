@@ -82,7 +82,8 @@ snpMap <- getSnpMap()
 
 # choose markers
 tempNum <- lapply(numLoci, function(x){
-	dfOut <- data.frame(chr = 1:nChr, num = round(x * (chrLen/ sum(chrLen)))) # proportional to chr length
+	dfOut <- data.frame(chr = 1:nChr, num = round(x * (chrLen/ sum(chrLen))), # proportional to chr length
+											length = 1) # positions here are in M w/ all chr being 1M in length
 	# account for rounding error
 	diff <- x - sum(dfOut$num)
 	if(diff > 0){
