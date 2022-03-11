@@ -745,8 +745,8 @@ read_scrm_transpose_for_AlphaSimR <- function(path, numLoci, min_maf = 0.05, num
 vcf_mh_greedyChooseLoci <- function(num, vcfPath, windSize = 60, numLines = 20000, numRand = 1000, tempDir = ""){
 	
 	# choice random SNPs and calculate He
-	system2("py", args = c("./mhCalcHe.py", vcfPath, sample(1:1000000000, 1), numRand, tempDir, windSize))
-	# system2("python3", args = c("./mhCalcHe.py", vcfPath, sample(1:1000000000, 1), numRand, tempDir, windSize))
+	# system2("py", args = c("./mhCalcHe.py", vcfPath, sample(1:1000000000, 1), numRand, tempDir, windSize))
+	system2("python3", args = c("./mhCalcHe.py", vcfPath, sample(1:1000000000, 1), numRand, tempDir, windSize))
 	
 	# note that we are using the column name "maf" even though the quantity is
 	# He. This is so the below code, originally written wtih maf, still works
