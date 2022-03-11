@@ -28,10 +28,10 @@ localTempDir <- cmdArgs[3]
 inputVCFpath <- cmdArgs[4]
 
 
-randSeed <- 7
-iterationNumber <- 1
-localTempDir <- "./"
-inputVCFpath <- "../ngulf.vcf"
+# randSeed <- 7
+# iterationNumber <- 1
+# localTempDir <- "./"
+# inputVCFpath <- "../ngulf.vcf"
 
 set.seed(randSeed)
 
