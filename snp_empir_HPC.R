@@ -200,7 +200,8 @@ snpMap <- getSnpMap()
 # choose markers
 # markers already chosen, now need to specify smaller panels
 tempNum <- lapply(numLoci, function(x){
-	dfOut <- data.frame(chr = 1:nChr, num = round(x * (chrLen/ sum(chrLen)))) # proportional to chr length
+	dfOut <- data.frame(chr = 1:nChr, num = round(x * (chrLen/ sum(chrLen))),
+											length = chrLen) # proportional to chr length
 	# account for rounding error (in same way as above, so numbers match w/ largest panel)
 	dfOut$num[which.max(dfOut$num)] <- dfOut$num[which.max(dfOut$num)] + x - sum(dfOut$num)
 	
