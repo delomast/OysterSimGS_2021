@@ -142,7 +142,7 @@ print("begin loading genotypes")
 # choose random and panel
 chosenLoci <- vcf_mh_greedyChooseLoci(num = num, vcfPath = inputVCFpath, 
 																			windSize = 60, numLines = 20000, numRand = num_choose_qtl,
-																			tempDir = localTempDir)
+																			tempDir = paste0(localTempDir, "/", "temp", iterationNumber, "/"))
 # spliting mh line numbers into ints
 mhLineNumbers <- as.numeric(unlist(str_split(chosenLoci[[2]]$lineNumber, pattern = ",")))
 if(length(mhLineNumbers) != n_distinct(mhLineNumbers)) stop("Error in mh greedy algorithm: duplicate SNPs in mh")
@@ -546,4 +546,4 @@ for(gen in 1:nGenerations){
 # initial testing, save everything
 # save.image(paste0("multGen_scrm_", iterationNumber, ".rda"))
 # for low memory use
-save(imputeRes, gebvRes, He_res, file = paste0("rda/multGen_empir_small_", prefix, "_", iterationNumber, ".rda"))
+save(imputeRes, gebvRes, He_res, file = paste0("rda/multGen_empir_MH_small_", prefix, "_", iterationNumber, ".rda"))
