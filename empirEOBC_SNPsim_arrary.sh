@@ -5,13 +5,13 @@
 #SBATCH --cpus-per-task=1  # ask for 1 cpu
 #SBATCH --mem=45G # Maximum amount of memory this job will be given
 #SBATCH --time=47:00:00 # ask that the job be allowed to run for 
-#SBATCH --array=36-69%75 #specify how many jobs in the array and limit number running concurrently (e.g. 1-96%40)
+#SBATCH --array=1-200%50 #specify how many jobs in the array and limit number running concurrently (e.g. 1-96%40)
 #SBATCH --output=arrayScrm_%a.out # tell it where to store the output console text
 
 echo "My SLURM_JOB_ID: " $SLURM_JOB_ID
 echo "My SLURM_ARRAY_TASK_ID: " $SLURM_ARRAY_TASK_ID
 
-module load bcftools
+# module load bcftools
 module load r/4.1.2
 
 # check for random seeds
