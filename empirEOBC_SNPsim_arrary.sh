@@ -4,7 +4,7 @@
 # written for execution on Ceres
 #SBATCH --cpus-per-task=1  # ask for 1 cpu
 #SBATCH --mem=45G # Maximum amount of memory this job will be given
-#SBATCH --time=47:00:00 # ask that the job be allowed to run for 
+#SBATCH --time=72:00:00 # ask that the job be allowed to run for 
 #SBATCH --array=1-200%75 #specify how many jobs in the array and limit number running concurrently (e.g. 1-96%40)
 #SBATCH --output=arrayScrm_%a.out # tell it where to store the output console text
 
