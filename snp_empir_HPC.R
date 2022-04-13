@@ -193,7 +193,7 @@ print("begin panel design")
 
 # number of loci in each panel to compare
 numLoci <- c(100, 250, 500, 750, 1000, 2000, 5000, 10000, 25000, maxSNPchip)
-numLoci <- numLoci[numLoci <= maxSNPchip]
+numLoci <- sort(unique(numLoci[numLoci <= maxSNPchip]))
 
 snpMap <- getSnpMap()
 
