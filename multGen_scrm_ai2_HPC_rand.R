@@ -393,4 +393,4 @@ for(gen in 1:nGenerations){
 # initial testing, save everything
 # save.image(paste0("multGen_scrm_", iterationNumber, ".rda"))
 # for low memory use
-save(imputeRes, gebvRes, He_res, file = paste0("rda/multGen_scrm_small_", iterationNumber, ".rda"))
+save(imputeRes, gebvRes, He_res, file = paste0("rda/multGen_scrm_small_rand_", iterationNumber, ".rda"))
