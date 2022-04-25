@@ -43,7 +43,7 @@ date
 echo "end scrm"
 
 # randomSeed iterationNumber TemporaryLocalStorageDirectory
-Rscript multGen_scrm_ai2_HPC_rand.R $x $SLURM_ARRAY_TASK_ID /90daydata/oyster_gs_sim/ 10
+Rscript multGen_scrm_ai2_HPC_numOff.R $x $SLURM_ARRAY_TASK_ID /90daydata/oyster_gs_sim/ 10
 
 # remove temp directory
 rm -r /90daydata/oyster_gs_sim/temp"$SLURM_ARRAY_TASK_ID"
