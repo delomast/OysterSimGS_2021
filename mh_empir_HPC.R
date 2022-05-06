@@ -115,6 +115,32 @@ if(grepl("mbp_simInput.vcf$", inputVCFpath)){
 	HDpanelSize <- 3000
 	num_choose_qtl <- 100
 	prefix <- "Ngulf"
+} else if(grepl("canadaAllPhased.vcf$", inputVCFpath)) {
+	num <- data.frame(chr = c("CM008241.1",
+														"CM008242.1",
+														"CM008243.1",
+														"CM008244.1",
+														"CM008245.1",
+														"CM008246.1",
+														"CM008247.1",
+														"CM008248.1",
+														"CM008249.1",
+														"CM008250.1"),
+										num = c(65668440,
+														61752955,
+														77061148,
+														59691872,
+														98698416,
+														51258098,
+														57830854,
+														75944018,
+														104168038,
+														32650045)
+	)
+	maxMHchip <- 500
+	HDpanelSize <- 14000
+	num_choose_qtl <- 1000
+	prefix <- "CAN"
 } else {
 	stop("not set up for input VCF")
 }
