@@ -204,7 +204,10 @@ EFGLmh::dumpTable(temp, "supp_impute_gebv_table.txt")
 heSummary %>% filter(genNum == 0) %>% group_by(sim) %>% filter(numLoci == max(numLoci))
 
 # drop in mean He from gen 0 to gen 3
-heDiff <- HeResAll %>% filter(!grepl("MH", sim)) %>% select(sim, genNum, numLoci, He, iter) %>%
+heDiff <- HeResAll %>% 
+	filter(!grepl("MH", sim), 
+				 !(grepl("curGenOnly_scrm", sim) & numLoci == 50000)) %>% # remove 50000 b/c it used all gen (to make selection decisions)) 
+	select(sim, genNum, numLoci, He, iter) %>%
 	spread(genNum, He) %>% mutate(diff = `0` - `3`) %>% group_by(sim, numLoci) %>%
 	summarise(mDiff = mean(diff), diffSD = sd(diff)) 
 colnames(heDiff) <- c("simulation", "number_of_loci", "decrease_in_He", "decrease_in_He_SD")
