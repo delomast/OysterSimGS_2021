@@ -2,7 +2,9 @@
 Simulations to compare genotyping strategies for genomic selection in 
 oyster breeding programs
 
-This repository holds the code used to perform the simulations described in _to be updated_.
+This repository holds the code used to perform the simulations described in Delomas et al. 2023, 
+Evaluating cost-effective genotyping strategies for genomic selection in oysters, _Aquaculture_, 
+https://doi.org/10.1016/j.aquaculture.2022.738844.
 
 generate_random_seeds.R is an R script that generates the random seeds used by the simulations. 
 This was run once prior to running the simulations. The simulations were run on an HPC 
